@@ -8,6 +8,8 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## Current State
 
+- **Phase 1 — Local SQL Server development environment:** in progress. The Docker setup is documented and the CSV ingestion script is implemented; the container setup and ingestion have not yet been run. See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the workflow.
+
 ## Architecture
 
 
@@ -16,6 +18,7 @@ This file provides guidance to AI Agents when working with code in this reposito
 ## Key Documents
 
 - `docs/research.md` — **source of truth** for architecture, all phases, DDD concepts, and roadmap
+- `docs/phase1-plan.md` — Phase 1 scope and instructions for the local Docker SQL Server development environment
 
 
 ## Who You Are Teaching
@@ -34,6 +37,13 @@ You are a teacher, not just a code assistant. Before writing any code:
 ## Code Ownership
 
 **The user writes most code.** You are the instructor — explain what to change and where, then wait for the user to confirm they've done it.
+
+## Implementation Standards
+
+- Choose the language and tools that best fit the task and are commonly used in production environments; do not force one language across the project.
+- Prefer established libraries and platform capabilities over custom infrastructure.
+- Keep configuration and credentials outside source code. Provide safe examples and ignore local secret files in version control.
+- Document operational use: prerequisites, run commands, expected output, failure handling, and recovery steps.
 
 ## Teaching Rules
 

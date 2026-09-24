@@ -1,0 +1,17 @@
+# Secrets
+.env
+.env.legacy_sqlserver
+.env.sqlserver
+
+# Python
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+
+# Virtual environment (managed by uv; recreate with `make install`)
+.venv/
+
+# Raw data (large; fetch per data/README.md instead of committing)
+data/raw/*.csv
