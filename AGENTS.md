@@ -8,7 +8,8 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## Current State
 
-- **Phase 1 — Local SQL Server development environment:** in progress. The Docker setup is documented and the CSV ingestion script is implemented; the container setup and ingestion have not yet been run. See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the workflow.
+- **Phase 1 — Local SQL Server development environment:** complete. The local Docker SQL Server is running and the CSV has been validated and published to `dbo.supply_chain_logistics`. See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the workflow.
+- **Phase 2 — Solution exploration:** not started.
 
 ## Architecture
 

@@ -6,7 +6,7 @@ An agentic AI chat interface over a legacy SQL Server supply-chain dataset. See 
 
 | Phase | Status | Docs |
 | --- | --- | --- |
-| 1 — Local SQL Server development environment | In progress: Docker setup and CSV ingestion script are implemented; container setup and ingestion have not yet been run | [`docs/phase1-plan.md`](docs/phase1-plan.md) |
+| 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md) |
 
 ## Prerequisites
 
