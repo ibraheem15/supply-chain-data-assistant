@@ -1,0 +1,203 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Chat With Your Supply Chain Data — Pitch Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  @page{ size:13.333in 7.5in; margin:0; }
+  :root{
+    --bg:#F6F7F9; --surface:#FFFFFF; --line:#E1E6EB;
+    --ink:#141A21; --muted:#5B6B7A;
+    --accent:#1B4D89; --accent-soft:#E8EFF7;
+    --font-display:'Archivo',Arial,sans-serif;
+    --font-body:'Source Sans 3',Arial,sans-serif;
+    --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:var(--font-body); color:var(--ink); }
+  .mono{ font-family:var(--font-mono); }
+  .tabular{ font-variant-numeric:tabular-nums; }
+  .icon{ width:1em; height:1em; }
+
+  .slide{
+    width:13.333in; height:7.5in;
+    background:var(--surface);
+    padding:0.62in 0.85in 0.72in;
+    display:flex; flex-direction:column; gap:19pt;
+    overflow:hidden;
+  }
+  .slide:not(:first-child){ break-before:page; }
+
+  .eyebrow{ font-family:var(--font-mono); font-size:13pt; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:500; }
+  h1.headline{ font-family:var(--font-display); font-weight:800; font-size:44pt; line-height:1.08; letter-spacing:-.01em; margin:4pt 0 0; max-width:500pt; color:var(--ink); }
+  .cover .headline, .close .headline{ font-size:61pt; max-width:690pt; }
+  p.sub{ font-size:18pt; line-height:1.55; color:var(--muted); max-width:460pt; margin:12pt 0 0; }
+
+  .topbar{ display:flex; justify-content:space-between; align-items:baseline; border-bottom:1pt solid var(--line); padding-bottom:10.5pt; }
+  .pageno{ font-family:var(--font-mono); font-size:12.5pt; color:var(--muted); }
+  .content{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:17pt; }
+
+  .card{ background:var(--surface); border:1pt solid var(--line); border-radius:5pt; padding:15pt 17pt; }
+  .card .badge{ width:25pt; height:25pt; font-size:14pt; display:flex; align-items:center; justify-content:center; border-radius:5pt; background:var(--accent-soft); color:var(--accent); margin-bottom:9pt; }
+  .card h3{ font-family:var(--font-display); font-size:16pt; font-weight:700; margin:0 0 4pt; }
+  .card p{ font-size:14pt; color:var(--muted); margin:0; line-height:1.5; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:13.5pt; }
+
+  .agenda{ display:flex; flex-direction:column; }
+  .agenda-row{ display:flex; align-items:center; gap:15pt; padding:12.5pt 0; border-bottom:1pt solid var(--line); }
+  .agenda-row:last-child{ border-bottom:none; }
+  .agenda-num{ font-family:var(--font-mono); font-size:16pt; color:var(--accent); width:25pt; }
+  .agenda-title{ font-family:var(--font-display); font-weight:700; font-size:18pt; width:195pt; }
+  .agenda-desc{ font-size:14pt; color:var(--muted); }
+
+  .timeline{ position:relative; display:flex; justify-content:space-between; gap:6pt; padding-top:6pt; }
+  .timeline::before{ content:""; position:absolute; top:20pt; left:19pt; right:19pt; height:1pt; background:var(--line); }
+  .tstep{ position:relative; flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; gap:5pt; }
+  .tdot{ width:21pt; height:21pt; border-radius:50%; background:var(--surface); border:1.6pt solid var(--accent); color:var(--accent); font-family:var(--font-mono); font-size:10pt; display:flex; align-items:center; justify-content:center; z-index:1; }
+  .tstep.final .tdot{ background:var(--accent); color:#fff; }
+  .tlabel{ font-size:12.5pt; max-width:115pt; line-height:1.35; }
+  .ttime{ font-family:var(--font-mono); font-size:10.5pt; color:var(--muted); }
+  .tstep.final .ttime{ color:var(--accent); font-weight:600; }
+
+  .flow{ display:flex; align-items:center; gap:8pt; flex-wrap:wrap; }
+  .fnode{ font-family:var(--font-mono); font-size:13pt; padding:9pt 13pt; border:1pt solid var(--line); border-radius:5pt; background:var(--surface); display:flex; align-items:center; gap:6pt; }
+  .fnode .icon{ width:13.5pt; height:13.5pt; color:var(--accent); }
+  .farrow{ color:var(--muted); width:13.5pt; height:13.5pt; flex:none; }
+
+  .chatline{ display:flex; max-width:500pt; }
+  .bubble{ font-size:14.5pt; line-height:1.5; padding:9.5pt 13.5pt; border-radius:8pt; border:1pt solid var(--line); }
+  .bubble.user{ background:var(--bg); }
+  .bubble.agent{ background:var(--accent-soft); border-color:#CBDCEE; }
+  .bubble .mono{ font-size:13pt; }
+
+  .callout{ font-family:var(--font-display); font-weight:700; font-size:16pt; color:var(--accent); }
+
+  .signoff .name{ font-family:var(--font-display); font-weight:700; font-size:17pt; }
+  .signoff .role{ font-size:13.5pt; color:var(--muted); }
+  .rule{ height:1.5pt; background:var(--accent); width:58pt; }
+</style>
+
+<!-- 1 — COVER -->
+<section class="slide cover">
+  <div class="content" style="justify-content:space-between">
+    <div>
+      <p class="eyebrow">Internal Proposal</p>
+      <h1 class="headline">Chat With Your<br>Supply Chain Data</h1>
+      <p class="sub">Replacing manual lookups and static dashboards with a secure, conversational interface over the legacy database.</p>
+    </div>
+    <div>
+      <div class="rule" style="margin-bottom:10pt"></div>
+      <div class="signoff">
+        <div class="name">Ibraheem Rehman</div>
+        <div class="role">Creator of this project</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 — AGENDA -->
+<section class="slide">
+  <div class="topbar"><span class="eyebrow">Agenda</span><span class="pageno mono tabular">02 / 08</span></div>
+  <div class="content agenda">
+    <div class="agenda-row"><span class="agenda-num mono">01</span><span class="agenda-title">Business problem</span><span class="agenda-desc">Why dashboards fall short today</span></div>
+    <div class="agenda-row"><span class="agenda-num mono">02</span><span class="agenda-title">Operational bottleneck</span><span class="agenda-desc">A day in the life, the manual way</span></div>
+    <div class="agenda-row"><span class="agenda-num mono">03</span><span class="agenda-title">The solution</span><span class="agenda-desc">Ask, don't query</span></div>
+    <div class="agenda-row"><span class="agenda-num mono">04</span><span class="agenda-title">The conversation</span><span class="agenda-desc">What it looks like in practice</span></div>
+    <div class="agenda-row"><span class="agenda-num mono">05</span><span class="agenda-title">Governance &amp; security</span><span class="agenda-desc">Who can do what, and how we know</span></div>
+    <div class="agenda-row"><span class="agenda-num mono">06</span><span class="agenda-title">Next steps</span><span class="agenda-desc">Where this goes from here</span></div>
+  </div>
+</section>
+
+<!-- 3 — BUSINESS PROBLEM -->
+<section class="slide">
+  <div class="topbar"><span class="eyebrow">Business Problem</span><span class="pageno mono tabular">03 / 08</span></div>
+  <div class="content">
+    <h1 class="headline">Dashboards ask people to already know the question.</h1>
+    <div class="grid2">
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div><h3>Fixed filters, fixed views</h3><p>If a question wasn't anticipated in the design, the dashboard can't answer it.</p></div>
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></div><h3>No connection across data</h3><p>Related records across screens still have to be pieced together by hand.</p></div>
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="10" rx="1.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Legacy system, no API</h3><p>The data is protected and any new interface must go through an approved path.</p></div>
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6"/><line x1="15" y1="15" x2="20.5" y2="20.5"/></svg></div><h3>New question, new screen</h3><p>Every unplanned question turns into a change request, and more training.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 — OPERATIONAL BOTTLENECK -->
+<section class="slide">
+  <div class="topbar"><span class="eyebrow">Operational Bottleneck &middot; Today</span><span class="pageno mono tabular">04 / 08</span></div>
+  <div class="content">
+    <h1 class="headline">A temperature alert, the manual way.</h1>
+    <div class="timeline">
+      <div class="tstep"><div class="tdot"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2L12 3z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg></div><div class="tlabel">Sensor flags rising temperature</div><div class="ttime">+0 min</div></div>
+      <div class="tstep"><div class="tdot"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="20" rx="2"/><circle cx="12" cy="17.3" r="0.6" fill="currentColor"/></svg></div><div class="tlabel">Driver calls dispatch</div><div class="ttime">+4 min</div></div>
+      <div class="tstep"><div class="tdot"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6"/><line x1="15" y1="15" x2="20.5" y2="20.5"/></svg></div><div class="tlabel">Ops manually queries the database</div><div class="ttime">+11 min</div></div>
+      <div class="tstep"><div class="tdot"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2h8l5 5v14a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14.5 2v5h5"/><line x1="8.5" y1="13" x2="15.5" y2="13"/><line x1="8.5" y1="17" x2="13" y2="17"/></svg></div><div class="tlabel">Analyst checks the SOP by hand</div><div class="ttime">+19 min</div></div>
+      <div class="tstep"><div class="tdot"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A3 3 0 0 1 7 3.5h10a3 3 0 0 1 3 3v6.5a3 3 0 0 1-3 3H9l-4 3.6v-3.6H7a3 3 0 0 1-3-3z"/></svg></div><div class="tlabel">Escalation sent up the chain</div><div class="ttime">+27 min</div></div>
+      <div class="tstep final"><div class="tdot"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6"/></svg></div><div class="tlabel">Corrective action taken</div><div class="ttime">+38 min</div></div>
+    </div>
+    <p class="sub" style="max-width:640pt">38 minutes from signal to action &mdash; most of it spent looking, not deciding.</p>
+  </div>
+</section>
+
+<!-- 5 — THE SOLUTION -->
+<section class="slide">
+  <div class="topbar"><span class="eyebrow">The Solution</span><span class="pageno mono tabular">05 / 08</span></div>
+  <div class="content">
+    <h1 class="headline">Ask, don't query.</h1>
+    <div class="flow">
+      <div class="fnode"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A3 3 0 0 1 7 3.5h10a3 3 0 0 1 3 3v6.5a3 3 0 0 1-3 3H9l-4 3.6v-3.6H7a3 3 0 0 1-3-3z"/></svg>Driver / ops user</div>
+      <svg class="farrow icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+      <div class="fnode"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5A3 3 0 0 1 7 3.5h10a3 3 0 0 1 3 3v6.5a3 3 0 0 1-3 3H9l-4 3.6v-3.6H7a3 3 0 0 1-3-3z"/></svg>Agent</div>
+      <svg class="farrow icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+      <div class="fnode"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6"/><path d="M5 12v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-6"/></svg>DB (read-only) + SOPs</div>
+      <svg class="farrow icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+      <div class="fnode"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6"/></svg>Answer</div>
+    </div>
+    <div class="chatline"><div class="bubble user">Any temperature issues on Route RT-2291 right now?</div></div>
+    <div class="chatline"><div class="bubble agent"><span class="mono">IOT_TEMP_C</span> is 6&deg;C above threshold. SOP-014 requires isolating the pallet and notifying the route owner within 30 minutes. Drafting the notification now.</div></div>
+    <p class="callout">Minutes, not an escalation chain.</p>
+  </div>
+</section>
+
+<!-- 6 — THE CONVERSATION CONTINUES -->
+<section class="slide">
+  <div class="topbar"><span class="eyebrow">The Conversation Continues</span><span class="pageno mono tabular">06 / 08</span></div>
+  <div class="content">
+    <h1 class="headline">Context carries the follow-up.</h1>
+    <div class="chatline"><div class="bubble user">Has this route had temperature problems before?</div></div>
+    <div class="chatline"><div class="bubble agent">Yes &mdash; 3 times in the last 90 days, all in the same trailer. Disruption likelihood for this route is trending up: <span class="mono">0.62 &rarr; 0.78</span>.</div></div>
+    <p class="sub" style="max-width:640pt">No new screen, no query language &mdash; the user just kept talking, and the agent kept the thread.</p>
+  </div>
+</section>
+
+<!-- 7 — GOVERNANCE & SECURITY -->
+<section class="slide">
+  <div class="topbar"><span class="eyebrow">Governance &amp; Security</span><span class="pageno mono tabular">07 / 08</span></div>
+  <div class="content">
+    <h1 class="headline">Access is scoped and provable, not assumed.</h1>
+    <div class="grid2">
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="10" rx="1.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div><h3>Least-privilege role</h3><p>The agent's database login can only <span class="mono">SELECT</span>. It cannot insert, update, or delete &mdash; enforced by the database, not application code.</p></div>
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg></div><h3>Governed views</h3><p>The agent queries curated views, not raw tables, exposing only approved columns and rows.</p></div>
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 2h8l5 5v14a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14.5 2v5h5"/><line x1="8.5" y1="13" x2="15.5" y2="13"/><line x1="8.5" y1="17" x2="13" y2="17"/></svg></div><h3>Immutable audit log</h3><p>Every query the agent runs, and every answer it gives, is written to an append-only log for review.</p></div>
+      <div class="card"><div class="badge"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.3 16c0-2 1.5-3 2.7-3s2.7 1 2.7 3"/><line x1="14" y1="9" x2="18" y2="9"/><line x1="14" y1="13" x2="18" y2="13"/></svg></div><h3>Role clarity</h3><p>Access follows the requester's own role. The agent never sees more than the person asking already could.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 — THANK YOU -->
+<section class="slide close">
+  <div class="content" style="justify-content:space-between">
+    <div>
+      <p class="eyebrow">Next: Phase 2 &mdash; Solution Exploration</p>
+      <h1 class="headline">Thank you.</h1>
+    </div>
+    <div>
+      <div class="rule" style="margin-bottom:10pt"></div>
+      <div class="signoff">
+        <div class="name">Ibraheem Rehman</div>
+        <div class="role">Creator of this project</div>
+      </div>
+    </div>
+  </div>
+</section>

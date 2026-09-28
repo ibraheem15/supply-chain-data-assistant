@@ -1,0 +1,338 @@
+<!doctype html>
+<title>Chat With Your Supply Chain Data</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#F6F7F9;
+    --surface:#FFFFFF;
+    --line:#E1E6EB;
+    --ink:#141A21;
+    --muted:#5B6B7A;
+    --accent:#1B4D89;
+    --accent-soft:#E8EFF7;
+    --amber:#B9752A;
+    --amber-soft:#F8EFE3;
+    --good:#2C8F63; --good-soft:#E6F4ED;
+    --warn:#B9832A; --warn-soft:#F8F0E1;
+    --bad:#BB4038; --bad-soft:#F8E9E8;
+    --font-display:'Archivo', ui-sans-serif, Arial, sans-serif;
+    --font-body:'Source Sans 3', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{ background:var(--bg); font-family:var(--font-body); color:var(--ink); overflow:hidden; }
+
+  .stage{ height:100%; display:flex; align-items:center; justify-content:center; padding-inline:16px; }
+  .frame{
+    position:relative;
+    aspect-ratio:16/9;
+    width:min(96vw, 170.6vh);
+    max-height:96vh;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:4px;
+    overflow:hidden;
+    container-type:inline-size;
+    box-shadow:0 24px 64px rgba(20,26,33,0.10);
+  }
+
+  .eyebrow{
+    font-family:var(--font-mono);
+    font-size:1.35cqw;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    font-weight:500;
+  }
+  h1.headline{
+    font-family:var(--font-display);
+    font-weight:800;
+    font-size:4.6cqw;
+    line-height:1.08;
+    letter-spacing:-0.01em;
+    margin:0.3cqw 0 0;
+    text-wrap:balance;
+    max-width:50cqw;
+    color:var(--ink);
+  }
+  .cover .headline, .close .headline{ font-size:6.4cqw; max-width:66cqw; }
+  p.sub{ font-size:1.85cqw; line-height:1.6; color:var(--muted); max-width:44cqw; margin:1.2cqw 0 0; }
+  .mono{ font-family:var(--font-mono); }
+  .tabular{ font-variant-numeric:tabular-nums; }
+
+  .slide{
+    position:absolute; inset:0;
+    padding:5.6cqw 6cqw 6.4cqw;
+    display:flex; flex-direction:column;
+    gap:2cqw;
+    opacity:0; transform:translateX(2%);
+    transition:opacity .35s ease, transform .35s ease;
+    pointer-events:none;
+  }
+  .slide[data-state="active"]{ opacity:1; transform:translateX(0); pointer-events:auto; }
+  .slide[data-state="before"]{ transform:translateX(-2%); }
+  @media (prefers-reduced-motion: reduce){ .slide{ transition:opacity .01s linear; transform:none; } }
+
+  .topbar{ display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid var(--line); padding-bottom:1.1cqw; }
+  .pageno{ font-family:var(--font-mono); font-size:1.3cqw; color:var(--muted); }
+  .content{ flex:1; display:flex; flex-direction:column; justify-content:center; gap:1.8cqw; }
+
+  .chrome{ position:absolute; inset:0; pointer-events:none; z-index:5; }
+  .navbtn{
+    position:absolute; top:50%; translate:0 -50%;
+    width:3.2cqw; height:3.2cqw; border-radius:50%;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    pointer-events:auto;
+  }
+  .navbtn:hover{ border-color:var(--accent); color:var(--accent); }
+  .navbtn:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .navbtn svg{ width:1.4cqw; height:1.4cqw; }
+  .navbtn.prev{ left:1.6cqw; } .navbtn.next{ right:1.6cqw; }
+  .dots{ position:absolute; bottom:2.2cqw; left:50%; translate:-50% 0; display:flex; gap:0.8cqw; pointer-events:auto; }
+  .dot{ width:0.8cqw; height:0.8cqw; min-width:6px; min-height:6px; border-radius:50%; background:var(--line); border:none; cursor:pointer; padding:0; }
+  .dot[aria-current="true"]{ background:var(--accent); }
+  .dot:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
+
+  .icon{ width:1em; height:1em; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:5px; padding:1.6cqw 1.8cqw; }
+  .card .badge{ width:2.6cqw; height:2.6cqw; font-size:1.4cqw; display:flex; align-items:center; justify-content:center; border-radius:5px; background:var(--accent-soft); color:var(--accent); margin-bottom:0.9cqw; }
+  .card h3{ font-family:var(--font-display); font-size:1.7cqw; font-weight:700; margin:0 0 0.4cqw; }
+  .card p{ font-size:1.45cqw; color:var(--muted); margin:0; line-height:1.5; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:1.4cqw; }
+  .row{ display:flex; gap:1.4cqw; align-items:stretch; }
+
+  .agenda{ display:flex; flex-direction:column; }
+  .agenda-row{ display:flex; align-items:center; gap:1.6cqw; padding:1.3cqw 0; border-bottom:1px solid var(--line); }
+  .agenda-row:last-child{ border-bottom:none; }
+  .agenda-num{ font-family:var(--font-mono); font-size:1.7cqw; color:var(--accent); width:2.6cqw; }
+  .agenda-title{ font-family:var(--font-display); font-weight:700; font-size:1.9cqw; width:20cqw; }
+  .agenda-desc{ font-size:1.5cqw; color:var(--muted); }
+
+  .timeline{ position:relative; display:flex; justify-content:space-between; gap:0.6cqw; padding-top:0.6cqw; }
+  .timeline::before{ content:""; position:absolute; top:2.1cqw; left:2cqw; right:2cqw; height:1px; background:var(--line); }
+  .tstep{ position:relative; flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; gap:0.55cqw; }
+  .tdot{ width:2.2cqw; height:2.2cqw; border-radius:50%; background:var(--surface); border:1.6px solid var(--accent); color:var(--accent); font-family:var(--font-mono); font-size:1.05cqw; display:flex; align-items:center; justify-content:center; z-index:1; }
+  .tstep.final .tdot{ background:var(--accent); color:#fff; }
+  .tlabel{ font-size:1.3cqw; max-width:12cqw; line-height:1.35; }
+  .ttime{ font-family:var(--font-mono); font-size:1.1cqw; color:var(--muted); }
+  .tstep.final .ttime{ color:var(--accent); font-weight:600; }
+
+  .flow{ display:flex; align-items:center; gap:0.8cqw; flex-wrap:wrap; }
+  .fnode{ font-family:var(--font-mono); font-size:1.35cqw; padding:0.9cqw 1.3cqw; border:1px solid var(--line); border-radius:5px; background:var(--surface); display:flex; align-items:center; gap:0.6cqw; }
+  .fnode .icon{ width:1.4cqw; height:1.4cqw; color:var(--accent); }
+  .farrow{ color:var(--muted); width:1.4cqw; height:1.4cqw; flex:none; }
+
+  .chatline{ display:flex; max-width:52cqw; }
+  .bubble{ font-size:1.5cqw; line-height:1.55; padding:1cqw 1.4cqw; border-radius:8px; border:1px solid var(--line); }
+  .bubble.user{ background:var(--bg); }
+  .bubble.agent{ background:var(--accent-soft); border-color:#CBDCEE; }
+  .bubble .mono{ font-size:1.3cqw; }
+
+  .callout{ font-family:var(--font-display); font-weight:700; font-size:1.7cqw; color:var(--accent); }
+
+  .signoff{ display:flex; flex-direction:column; gap:0.2cqw; }
+  .signoff .name{ font-family:var(--font-display); font-weight:700; font-size:1.8cqw; }
+  .signoff .role{ font-size:1.4cqw; color:var(--muted); }
+  .rule{ height:1px; background:var(--line); width:6cqw; }
+
+  @media (max-width:520px){ .frame{ width:96vw; } }
+</style>
+
+<div class="stage">
+  <div class="frame" id="frame">
+
+    <svg width="0" height="0" style="position:absolute">
+      <defs>
+        <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 6.5A3 3 0 0 1 7 3.5h10a3 3 0 0 1 3 3v6.5a3 3 0 0 1-3 3H9l-4 3.6v-3.6H7a3 3 0 0 1-3-3z"/></symbol>
+        <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="1.6"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+        <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6"/><path d="M5 12v6c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-6"/></symbol>
+        <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6.5 2h8l5 5v14a1 1 0 0 1-1 1h-12a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14.5 2v5h5"/><line x1="8.5" y1="13" x2="15.5" y2="13"/><line x1="8.5" y1="17" x2="13" y2="17"/></symbol>
+        <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3z"/><line x1="12" y1="9.5" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></symbol>
+        <symbol id="i-phone" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="20" rx="2"/><circle cx="12" cy="17.3" r="0.6" fill="currentColor"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><line x1="15" y1="15" x2="20.5" y2="20.5"/></symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+        <symbol id="i-id" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6.3 16c0-2 1.5-3 2.7-3s2.7 1 2.7 3"/><line x1="14" y1="9" x2="18" y2="9"/><line x1="14" y1="13" x2="18" y2="13"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6"/></symbol>
+        <symbol id="i-arrow-r" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+        <symbol id="i-arrow-l" viewBox="0 0 24 24"><path d="M20 12H5M11 6l-6 6 6 6"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.4 2"/></symbol>
+      </defs>
+    </svg>
+
+    <!-- 1 — COVER -->
+    <section class="slide cover" data-state="active">
+      <div class="content" style="justify-content:space-between">
+        <div>
+          <p class="eyebrow">Internal Proposal</p>
+          <h1 class="headline">Chat With Your<br>Supply Chain Data</h1>
+          <p class="sub">Replacing manual lookups and static dashboards with a secure, conversational interface over the legacy database.</p>
+        </div>
+        <div>
+          <div class="rule" style="margin-bottom:1cqw"></div>
+          <div class="signoff">
+            <div class="name">Ibraheem Rehman</div>
+            <div class="role">Creator of this project</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 — AGENDA -->
+    <section class="slide" data-state="after">
+      <div class="topbar"><span class="eyebrow">Agenda</span><span class="pageno mono tabular">02 / 08</span></div>
+      <div class="content agenda">
+        <div class="agenda-row"><span class="agenda-num mono">01</span><span class="agenda-title">Business problem</span><span class="agenda-desc">Why dashboards fall short today</span></div>
+        <div class="agenda-row"><span class="agenda-num mono">02</span><span class="agenda-title">Operational bottleneck</span><span class="agenda-desc">A day in the life, the manual way</span></div>
+        <div class="agenda-row"><span class="agenda-num mono">03</span><span class="agenda-title">The solution</span><span class="agenda-desc">Ask, don't query</span></div>
+        <div class="agenda-row"><span class="agenda-num mono">04</span><span class="agenda-title">The conversation</span><span class="agenda-desc">What it looks like in practice</span></div>
+        <div class="agenda-row"><span class="agenda-num mono">05</span><span class="agenda-title">Governance &amp; security</span><span class="agenda-desc">Who can do what, and how we know</span></div>
+        <div class="agenda-row"><span class="agenda-num mono">06</span><span class="agenda-title">Next steps</span><span class="agenda-desc">Where this goes from here</span></div>
+      </div>
+    </section>
+
+    <!-- 3 — BUSINESS PROBLEM -->
+    <section class="slide" data-state="after">
+      <div class="topbar"><span class="eyebrow">Business Problem</span><span class="pageno mono tabular">03 / 08</span></div>
+      <div class="content">
+        <h1 class="headline">Dashboards ask people to already know the question.</h1>
+        <div class="grid2">
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-grid"/></svg></div><h3>Fixed filters, fixed views</h3><p>If a question wasn't anticipated in the design, the dashboard can't answer it.</p></div>
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-layers"/></svg></div><h3>No connection across data</h3><p>Related records across screens still have to be pieced together by hand.</p></div>
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-lock"/></svg></div><h3>Legacy system, no API</h3><p>The data is protected and any new interface must go through an approved path.</p></div>
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-search"/></svg></div><h3>New question, new screen</h3><p>Every unplanned question turns into a change request, and more training.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 — OPERATIONAL BOTTLENECK -->
+    <section class="slide" data-state="after">
+      <div class="topbar"><span class="eyebrow">Operational Bottleneck &middot; Today</span><span class="pageno mono tabular">04 / 08</span></div>
+      <div class="content">
+        <h1 class="headline">A temperature alert, the manual way.</h1>
+        <div class="timeline">
+          <div class="tstep"><div class="tdot"><svg class="icon"><use href="#i-warn"/></svg></div><div class="tlabel">Sensor flags rising temperature</div><div class="ttime">+0 min</div></div>
+          <div class="tstep"><div class="tdot"><svg class="icon"><use href="#i-phone"/></svg></div><div class="tlabel">Driver calls dispatch</div><div class="ttime">+4 min</div></div>
+          <div class="tstep"><div class="tdot"><svg class="icon"><use href="#i-search"/></svg></div><div class="tlabel">Ops manually queries the database</div><div class="ttime">+11 min</div></div>
+          <div class="tstep"><div class="tdot"><svg class="icon"><use href="#i-doc"/></svg></div><div class="tlabel">Analyst checks the SOP by hand</div><div class="ttime">+19 min</div></div>
+          <div class="tstep"><div class="tdot"><svg class="icon"><use href="#i-chat"/></svg></div><div class="tlabel">Escalation sent up the chain</div><div class="ttime">+27 min</div></div>
+          <div class="tstep final"><div class="tdot"><svg class="icon"><use href="#i-check"/></svg></div><div class="tlabel">Corrective action taken</div><div class="ttime">+38 min</div></div>
+        </div>
+        <p class="sub" style="max-width:56cqw">38 minutes from signal to action &mdash; most of it spent looking, not deciding.</p>
+      </div>
+    </section>
+
+    <!-- 5 — THE SOLUTION -->
+    <section class="slide" data-state="after">
+      <div class="topbar"><span class="eyebrow">The Solution</span><span class="pageno mono tabular">05 / 08</span></div>
+      <div class="content">
+        <h1 class="headline">Ask, don't query.</h1>
+        <div class="flow">
+          <div class="fnode"><svg class="icon"><use href="#i-chat"/></svg>Driver / ops user</div>
+          <svg class="farrow icon"><use href="#i-arrow-r"/></svg>
+          <div class="fnode"><svg class="icon"><use href="#i-chat"/></svg>Agent</div>
+          <svg class="farrow icon"><use href="#i-arrow-r"/></svg>
+          <div class="fnode"><svg class="icon"><use href="#i-db"/></svg>DB (read-only) + SOPs</div>
+          <svg class="farrow icon"><use href="#i-arrow-r"/></svg>
+          <div class="fnode"><svg class="icon"><use href="#i-check"/></svg>Answer</div>
+        </div>
+        <div class="chatline"><div class="bubble user">Any temperature issues on Route RT-2291 right now?</div></div>
+        <div class="chatline"><div class="bubble agent"><span class="mono">IOT_TEMP_C</span> is 6&deg;C above threshold. SOP-014 requires isolating the pallet and notifying the route owner within 30 minutes. Drafting the notification now.</div></div>
+        <p class="callout">Minutes, not an escalation chain.</p>
+      </div>
+    </section>
+
+    <!-- 6 — THE CONVERSATION CONTINUES -->
+    <section class="slide" data-state="after">
+      <div class="topbar"><span class="eyebrow">The Conversation Continues</span><span class="pageno mono tabular">06 / 08</span></div>
+      <div class="content">
+        <h1 class="headline">Context carries the follow-up.</h1>
+        <div class="chatline"><div class="bubble user">Has this route had temperature problems before?</div></div>
+        <div class="chatline"><div class="bubble agent">Yes &mdash; 3 times in the last 90 days, all in the same trailer. Disruption likelihood for this route is trending up: <span class="mono">0.62 &rarr; 0.78</span>.</div></div>
+        <p class="sub" style="max-width:56cqw">No new screen, no query language &mdash; the user just kept talking, and the agent kept the thread.</p>
+      </div>
+    </section>
+
+    <!-- 7 — GOVERNANCE & SECURITY -->
+    <section class="slide" data-state="after">
+      <div class="topbar"><span class="eyebrow">Governance &amp; Security</span><span class="pageno mono tabular">07 / 08</span></div>
+      <div class="content">
+        <h1 class="headline">Access is scoped and provable, not assumed.</h1>
+        <div class="grid2">
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-lock"/></svg></div><h3>Least-privilege role</h3><p>The agent's database login can only <span class="mono">SELECT</span>. It cannot insert, update, or delete &mdash; enforced by the database, not application code.</p></div>
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-eye"/></svg></div><h3>Governed views</h3><p>The agent queries curated views, not raw tables, exposing only approved columns and rows.</p></div>
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-doc"/></svg></div><h3>Immutable audit log</h3><p>Every query the agent runs, and every answer it gives, is written to an append-only log for review.</p></div>
+          <div class="card"><div class="badge"><svg class="icon"><use href="#i-id"/></svg></div><h3>Role clarity</h3><p>Access follows the requester's own role. The agent never sees more than the person asking already could.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 — THANK YOU -->
+    <section class="slide close" data-state="after">
+      <div class="content" style="justify-content:space-between">
+        <div>
+          <p class="eyebrow">Next: Phase 2 &mdash; Solution Exploration</p>
+          <h1 class="headline">Thank you.</h1>
+        </div>
+        <div>
+          <div class="rule" style="margin-bottom:1cqw"></div>
+          <div class="signoff">
+            <div class="name">Ibraheem Rehman</div>
+            <div class="role">Creator of this project</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="chrome">
+      <button class="navbtn prev" id="prev" aria-label="Previous slide"><svg class="icon"><use href="#i-arrow-l"/></svg></button>
+      <button class="navbtn next" id="next" aria-label="Next slide"><svg class="icon"><use href="#i-arrow-r"/></svg></button>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var n = slides.length;
+  var i = 0;
+  var dotsEl = document.getElementById('dots');
+
+  for (var d = 0; d < n; d++){
+    var b = document.createElement('button');
+    b.className = 'dot';
+    b.setAttribute('aria-label', 'Go to slide ' + (d+1));
+    b.addEventListener('click', (function(idx){ return function(){ go(idx); }; })(d));
+    dotsEl.appendChild(b);
+  }
+  var dotEls = Array.prototype.slice.call(dotsEl.children);
+
+  function render(){
+    slides.forEach(function(s, idx){
+      s.setAttribute('data-state', idx === i ? 'active' : (idx < i ? 'before' : 'after'));
+      s.setAttribute('aria-hidden', idx === i ? 'false' : 'true');
+    });
+    dotEls.forEach(function(dt, idx){ dt.setAttribute('aria-current', idx === i ? 'true' : 'false'); });
+  }
+  function go(idx){ i = Math.max(0, Math.min(n - 1, idx)); render(); }
+
+  document.getElementById('prev').addEventListener('click', function(){ go(i - 1); });
+  document.getElementById('next').addEventListener('click', function(){ go(i + 1); });
+  window.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight' || e.key === ' ') { go(i + 1); }
+    else if (e.key === 'ArrowLeft') { go(i - 1); }
+    else if (e.key === 'Home') { go(0); }
+    else if (e.key === 'End') { go(n - 1); }
+  });
+
+  render();
+})();
+</script>
