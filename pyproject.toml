@@ -5,6 +5,15 @@ description = "Agentic AI chat interface over a legacy SQL Server supply-chain d
 requires-python = ">=3.11"
 dependencies = [
     "pyodbc>=5,<6",
+    "langchain-core>=0.3,<0.4",
+    "langchain-text-splitters>=0.3,<0.4",
+    "langchain-pinecone>=0.2,<0.3",
+    "langchain-huggingface>=0.1,<0.2",
+    "langchain-google-genai>=2,<3",
+    "sentence-transformers>=3,<4",
+    "torch>=2.5,<3",
+    "pypdf>=5,<6",
+    "openpyxl>=3.1,<4",
 ]
 
 [dependency-groups]
@@ -15,6 +24,14 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 110

@@ -1,4 +1,4 @@
-.PHONY: install lock sync lint format test ingest-dry-run ingest sqlserver-up sqlserver-down clean
+.PHONY: install lock sync lint format test ingest-dry-run ingest sop-ingest-dry-run sop-ingest sqlserver-up sqlserver-down clean
 
 install: lock sync
 
@@ -23,11 +23,17 @@ ingest-dry-run:
 ingest:
 	uv run python src/data/ingest_supply_chain_dataset.py
 
+sop-ingest-dry-run:
+	uv run python src/data/ingest_sop_pinecone.py --dry-run
+
+sop-ingest:
+	uv run python src/data/ingest_sop_pinecone.py
+
 sqlserver-up:
 	docker run \
 		--name legacy-sqlserver \
 		--hostname legacy-sqlserver \
-		--env-file .env.legacy_sqlserver \
+		--env-file envs/legacy_sqlserver.env \
 		--publish 1433:1433 \
 		--volume legacy_sqlserver_data:/var/opt/mssql \
 		--detach \

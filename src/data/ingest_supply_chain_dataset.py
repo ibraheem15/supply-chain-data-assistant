@@ -16,7 +16,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV = ROOT / "data" / "raw" / "dynamic_supply_chain_logistics_dataset.csv"
-DEFAULT_ENV_FILE = ROOT / ".env.legacy_sqlserver"
+DEFAULT_ENV_FILE = ROOT / "envs" / "legacy_sqlserver.env"
 DATABASE_TABLE = "dbo.supply_chain_logistics"
 STAGING_TABLE = "dbo.supply_chain_logistics_staging"
 RISK_LEVELS = {"Low Risk", "Moderate Risk", "High Risk"}

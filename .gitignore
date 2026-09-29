@@ -1,7 +1,8 @@
 # Secrets
 .env
-.env.legacy_sqlserver
-.env.sqlserver
+legacy_sqlserver.env
+LLM.env
+vectorDB.env
 
 # Python
 __pycache__/
@@ -15,3 +16,6 @@ __pycache__/
 
 # Raw data (large; fetch per data/README.md instead of committing)
 data/raw/*.csv
+
+# Local SOP-ingestion hash cache (generated state, not source)
+.cache/

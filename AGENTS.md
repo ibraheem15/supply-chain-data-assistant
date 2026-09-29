@@ -10,11 +10,11 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 - **Phase 1 — Local SQL Server development environment:** complete. The local Docker SQL Server is running and the CSV has been validated and published to `dbo.supply_chain_logistics`. See [`docs/phase1-plan.md`](docs/phase1-plan.md) and [`docs/phase1-notes.md`](docs/phase1-notes.md) for the workflow and retrospective.
 - **Phase 2 — Solution exploration:** complete. Business case and technical design (HLD/LLD) drafted in [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), and [`docs/business-pitch.html`](docs/business-pitch.html) — see [`docs/phase2-notes.md`](docs/phase2-notes.md) for the retrospective and the items deferred to Phase 3 (chunking strategy, SOP-change handling, PDF/Markdown ingestion pipeline). None of this design is implemented yet.
-- **Phase 3 — Implementation:** not started.
+- **Phase 3 — Implementation:** in progress. The SOP ingestion pipeline (parsing, heading-aware chunking, local/Gemini embeddings, incremental Pinecone sync) is complete — see [`docs/phase3-notes.md`](docs/phase3-notes.md). Not yet built: the RAG query tool, the text2sql tool, the `resources/` application layer, and the agent orchestration.
 
 ## Architecture
 
-See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and dependency diagram of what is actually implemented (currently: Phase 1's ingestion module only).
+See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and dependency diagram of what is actually implemented (currently: Phase 1's ingestion module, plus the Phase 3 SOP ingestion module).
 
 **DDD concepts applied:** Ubiquitous Language, Entity vs Value Object, Interface as Contract, dependency direction, packages as layers, Application layer (resources/).
 
@@ -27,6 +27,8 @@ See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and d
 - `docs/technical-design-doc.html` — Phase 2 technical design draft (HLD/LLD); not yet implemented
 - `docs/business-pitch.html` — Phase 2 business case draft
 - `docs/phase2-notes.md` — Phase 2 retrospective: decisions made, concepts introduced, items deferred to Phase 3
+- `docs/phase-3-plan.md` — Phase 3 SOP-ingestion design: chunking, embeddings, re-indexing/sync
+- `docs/phase3-notes.md` — Phase 3 retrospective so far: SOP ingestion pipeline; what's still open
 
 
 ## Who You Are Teaching

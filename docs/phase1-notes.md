@@ -17,7 +17,8 @@ raw CSV → parse_csv() validation → staging table (batched insert) → transa
 ├── Makefile
 ├── pyproject.toml
 ├── uv.lock
-├── .env.legacy_sqlserver.example
+├── envs/
+│   └── legacy_sqlserver.example.env
 ├── data/
 │   ├── README.md
 │   └── raw/                                    (gitignored; CSV downloaded manually)
@@ -51,8 +52,8 @@ to that real endpoint yet.
 
 ### Secrets handling
 
-`MSSQL_SA_PASSWORD` lives in `.env.legacy_sqlserver`, which is gitignored — only
-`.env.legacy_sqlserver.example` (placeholders only) is committed. `read_env_file()`
+`MSSQL_SA_PASSWORD` lives in `envs/legacy_sqlserver.env`, which is gitignored — only
+`envs/legacy_sqlserver.example.env` (placeholders only) is committed. `read_env_file()`
 parses simple `KEY=VALUE` lines without ever logging their values, and the top-level
 error handler in `main()` redacts the password out of any exception text before
 logging it — ODBC driver errors can otherwise echo the connection string back verbatim.

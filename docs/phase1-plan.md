@@ -29,20 +29,20 @@ Think of the database container as a locally run infrastructure dependency, simi
 
 ### Start the container
 
-Copy `.env.legacy_sqlserver.example` to `.env.legacy_sqlserver` in the repository root and replace the placeholder with a strong development password:
+Copy `envs/legacy_sqlserver.example.env` to `envs/legacy_sqlserver.env` and replace the placeholder with a strong development password:
 
 ```dotenv
 ACCEPT_EULA=Y
 MSSQL_SA_PASSWORD=ReplaceWithA_Strong_Development_Password1!
 ```
 
-Keep `.env.legacy_sqlserver` out of version control (it already is — see `.gitignore`). Then run:
+Keep `envs/legacy_sqlserver.env` out of version control (it already is — see `.gitignore`). Then run:
 
 ```bash
 docker run \
   --name legacy-sqlserver \
   --hostname legacy-sqlserver \
-  --env-file .env.legacy_sqlserver \
+  --env-file envs/legacy_sqlserver.env \
   --publish 1433:1433 \
   --volume legacy_sqlserver_data:/var/opt/mssql \
   --detach \
@@ -59,7 +59,7 @@ The image requires `ACCEPT_EULA=Y` and a valid strong `MSSQL_SA_PASSWORD`; the p
 
 ### Ingest the raw dataset
 
-The CSV is the source artifact for local development. The loader is implemented in `src/data/ingest_supply_chain_dataset.py` using Python and `pyodbc`, a well-established fit for CSV processing and SQL Server integration. It reads the SQL Server administrator password from `.env.legacy_sqlserver` by default and never logs credential values. Install the Python dependencies with `uv sync` (see the [project README](../README.md) for `uv` setup).
+The CSV is the source artifact for local development. The loader is implemented in `src/data/ingest_supply_chain_dataset.py` using Python and `pyodbc`, a well-established fit for CSV processing and SQL Server integration. It reads the SQL Server administrator password from `envs/legacy_sqlserver.env` by default and never logs credential values. Install the Python dependencies with `uv sync` (see the [project README](../README.md) for `uv` setup).
 
 `pyodbc` is only the client-side Python binding — the database server runs in the Docker container above, but the *ingestion script itself runs on the host* and needs its own client-side ODBC stack to connect out to that container over the network, the same way a `psql` or `mysql` client would need installing locally to reach a containerized database. Two host system packages are required, neither of which comes from `uv sync`:
 
