@@ -57,7 +57,7 @@
   <p>The only package that exists is <code>src/data/</code>, containing a single module:
   <code>ingest_supply_chain_dataset.py</code>. It has one class-shaped concept (a Value Object),
   one domain exception, and module-level functions that orchestrate validation and publishing.
-  There is no <code>resources/</code> application layer, agent, or tool interface yet — those are Phase 2 work.</p>
+  There is no <code>resources/</code> application layer, agent, or tool interface yet — those are Phase 3 work.</p>
 
   <h2>Class Diagram</h2>
   <div class="diagram">
@@ -152,14 +152,14 @@
     <tr><th>Concept</th><th>Where</th></tr>
     <tr><td>Ubiquitous Language</td><td><code>COLUMNS</code> — business-readable field names (<code>iot_temperature</code>, <code>risk_classification</code>) used everywhere except the one translation point below</td></tr>
     <tr><td>Anti-Corruption Layer</td><td><code>LEGACY_COLUMN_NAMES</code> — the single place mapping ubiquitous language to the legacy system's terse column names (<code>IOT_TEMP_C</code>)</td></tr>
-    <tr><td>Entity vs. Value Object</td><td><code>DatabaseConfig</code> is a Value Object: no identity, immutable, defined only by its field values. No Entities yet — Phase 2's structured-data path will likely introduce one</td></tr>
+    <tr><td>Entity vs. Value Object</td><td><code>DatabaseConfig</code> is a Value Object: no identity, immutable, defined only by its field values. No Entities yet — Phase 3's structured-data path will likely introduce one</td></tr>
     <tr><td>Interface as Contract</td><td><code>IngestionError</code> is the contract for "expected, actionable failure" vs. an unexpected bug</td></tr>
     <tr><td>Dependency direction</td><td>Validation logic (<code>parse_csv</code>) depends on nothing infrastructure-related; only the database-facing functions depend on <code>pyodbc</code></td></tr>
-    <tr><td>Packages as layers</td><td>Not yet meaningful with a single module — see below for what Phase 2 introduces</td></tr>
+    <tr><td>Packages as layers</td><td>Not yet meaningful with a single module — see below for what Phase 3 introduces</td></tr>
   </table>
 
-  <h2>Planned, Not Yet Implemented (Phase 2)</h2>
-  <p>Per <code>AGENTS.md</code>'s architecture note and the drafted TDD, Phase 2 is expected to add an
+  <h2>Planned, Not Yet Implemented (Phase 3)</h2>
+  <p>Per <code>AGENTS.md</code>'s architecture note and the drafted TDD, Phase 3 is expected to add an
   <strong>Application layer</strong> (<code>resources/</code>) around two tool interfaces: a
   <strong>text2sql</strong> tool (structured data path, via MCP) and a <strong>RAG</strong> tool
   (unstructured SOP path). Until that code exists, this section is a pointer, not a diagram —
