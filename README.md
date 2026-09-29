@@ -6,7 +6,9 @@ An agentic AI chat interface over a legacy SQL Server supply-chain dataset. See 
 
 | Phase | Status | Docs |
 | --- | --- | --- |
-| 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md) |
+| 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md), [`docs/phase1-notes.md`](docs/phase1-notes.md) |
+| 2 — Solution exploration | Complete: business case and technical design (HLD/LLD) drafted; some LLD items (chunking strategy, SOP ingestion pipeline) deferred to Phase 3 | [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), [`docs/business-pitch.html`](docs/business-pitch.html), [`docs/phase2-notes.md`](docs/phase2-notes.md) |
+| 3 — Implementation | Not started | — |
 
 ## Prerequisites
 
@@ -47,8 +49,15 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   ├── README.md              # Dataset documentation
 │   └── raw/                   # Raw source CSV (gitignored)
 ├── docs/
-│   ├── problem_statement.md   # Problem framing
-│   └── phase1-plan.md         # Phase 1 scope and instructions
+│   ├── problem_statement.md        # Problem framing
+│   ├── phase1-plan.md              # Phase 1 scope and instructions
+│   ├── phase1-notes.md             # Phase 1 retrospective: what was built, concepts
+│   ├── research.md                 # Source of truth: architecture, phases, DDD, roadmap
+│   ├── domain-model.md             # Canonical class/dependency diagram (current code only)
+│   ├── domain-model.html           # domain-model.md, rendered
+│   ├── technical-design-doc.html   # Phase 2 TDD draft (HLD/LLD) — not yet implemented
+│   ├── business-pitch.html         # Phase 2 business case draft
+│   └── phase2-notes.md             # Phase 2 retrospective and items deferred to Phase 3
 └── src/
     └── data/
         └── ingest_supply_chain_dataset.py  # CSV -> SQL Server loader

@@ -8,11 +8,13 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 ## Current State
 
-- **Phase 1 — Local SQL Server development environment:** complete. The local Docker SQL Server is running and the CSV has been validated and published to `dbo.supply_chain_logistics`. See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the workflow.
-- **Phase 2 — Solution exploration:** not started.
+- **Phase 1 — Local SQL Server development environment:** complete. The local Docker SQL Server is running and the CSV has been validated and published to `dbo.supply_chain_logistics`. See [`docs/phase1-plan.md`](docs/phase1-plan.md) and [`docs/phase1-notes.md`](docs/phase1-notes.md) for the workflow and retrospective.
+- **Phase 2 — Solution exploration:** complete. Business case and technical design (HLD/LLD) drafted in [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), and [`docs/business-pitch.html`](docs/business-pitch.html) — see [`docs/phase2-notes.md`](docs/phase2-notes.md) for the retrospective and the items deferred to Phase 3 (chunking strategy, SOP-change handling, PDF/Markdown ingestion pipeline). None of this design is implemented yet.
+- **Phase 3 — Implementation:** not started.
 
 ## Architecture
 
+See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and dependency diagram of what is actually implemented (currently: Phase 1's ingestion module only).
 
 **DDD concepts applied:** Ubiquitous Language, Entity vs Value Object, Interface as Contract, dependency direction, packages as layers, Application layer (resources/).
 
@@ -20,6 +22,11 @@ This file provides guidance to AI Agents when working with code in this reposito
 
 - `docs/research.md` — **source of truth** for architecture, all phases, DDD concepts, and roadmap
 - `docs/phase1-plan.md` — Phase 1 scope and instructions for the local Docker SQL Server development environment
+- `docs/phase1-notes.md` — Phase 1 retrospective: what was built, Python/FDE/DDD concepts introduced
+- `docs/domain-model.md` / `docs/domain-model.html` — canonical class and dependency diagram, current implemented state only
+- `docs/technical-design-doc.html` — Phase 2 technical design draft (HLD/LLD); not yet implemented
+- `docs/business-pitch.html` — Phase 2 business case draft
+- `docs/phase2-notes.md` — Phase 2 retrospective: decisions made, concepts introduced, items deferred to Phase 3
 
 
 ## Who You Are Teaching
