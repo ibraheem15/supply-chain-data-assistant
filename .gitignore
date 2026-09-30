@@ -1,6 +1,7 @@
 # Secrets
 .env
 legacy_sqlserver.env
+agent_sqlserver.env
 LLM.env
 vectorDB.env
 

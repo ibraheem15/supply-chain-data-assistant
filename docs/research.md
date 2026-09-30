@@ -188,20 +188,26 @@ interaction.
 Security is implemented at the physical database layer to mitigate prompt injection
 risks.
 
-### Telemetry Security (VW_ACTIVE_FLEET)
+### Telemetry Security (ai.VW_SUPPLY_CHAIN_READINGS)
 
-The agent interacts solely with a read-only SQL view, VW_ACTIVE_FLEET.
+The agent interacts solely with a read-only SQL view, `ai.VW_SUPPLY_CHAIN_READINGS`
+(implemented in `src/data/setup_security_and_view.sql`; see Phase 3b in `phase-3-plan.md`).
 
-- Fields Exposed: Shipment_ID, Latitude, Longitude, Cargo_Type,
-  Current_Temperature.
-- Security Principle: By exposing only a flat, view-based schema, we physically
-  prevent the agent from executing DROP, UPDATE, or DELETE commands.
+- Fields Exposed: all 26 dataset columns, renamed from the legacy names to the
+  project's ubiquitous-language names (e.g. `iot_temperature`, `vehicle_gps_latitude`,
+  `risk_classification`).
+- Design change: the original draft named this view `VW_ACTIVE_FLEET` with
+  `Shipment_ID`, `Cargo_Type` and `Current_Temperature`. The dataset has no shipment id
+  or cargo type and holds hourly historical readings, not a live fleet, so that view
+  cannot be built.
+- Security Principle: the agent has `SELECT` on this one view only, and the database
+  refuses everything else. This is verified by a self-check at the end of the script.
 
 ### Role-Based Access Control (RBAC)
 
 Database connections are established using the USR_FDE_RO service account. This
 account lacks permissions to write, modify schema, or access tables outside the
-specified view.
+specified view. Enforced with explicit `DENY` on the `dbo` and `ai` schemas.
 
 ### Immutable Auditing
 

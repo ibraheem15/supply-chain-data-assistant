@@ -1,9 +1,10 @@
-# Phase 3 Notes: SOP Ingestion Pipeline
+# Phase 3 Notes: SOP Ingestion Pipeline and Agent Security Layer
 
-**Status: Phase 3 is in progress, not complete.** This covers one piece of it — the SOP
-ingestion pipeline (chunking, embeddings, Pinecone vector store). The RAG query tool,
-the text2sql tool, the `resources/` application layer, and the agent orchestration are
-not built yet. See **What's Next** below.
+**Status: Phase 3 is in progress, not complete.** This covers two pieces of it — the SOP
+ingestion pipeline (3a: chunking, embeddings, Pinecone vector store) and the agent's
+read-only database access (3b: least-privilege user and semantic view). The RAG query
+tool, the text2sql tool, the `resources/` application layer, and the agent orchestration
+are not built yet. See **What's Next** below.
 
 ## What We Built
 
@@ -12,8 +13,12 @@ for Markdown), embeds them, and syncs the result into a Pinecone vector index �
 touching files that are new, changed, or deleted since the last run.
 
 ```
-data/policy/*.{md,txt,pdf,csv,xlsx} -> parse (format dispatch) -> chunk -> embed -> Pinecone (incremental)
+3a: data/policy/*.{md,txt,pdf,csv,xlsx} -> parse (format dispatch) -> chunk -> embed -> Pinecone (incremental)
+3b: dbo.supply_chain_logistics -> ai.VW_SUPPLY_CHAIN_READINGS (renamed columns) -> USR_FDE_RO (SELECT on the view only)
 ```
+
+Phase 3b, in one line: the agent gets a database login that can read one renamed view
+and nothing else.
 
 ## File Structure
 
@@ -23,11 +28,13 @@ data/
     └── Cold_Chain_Incident_SOP_v2.md
 envs/
 ├── vectorDB.env / vectorDB.example.env    # PINECONE_*, EMBEDDING_PROVIDER
-└── LLM.env / LLM.example.env              # GEMINI_*
+├── LLM.env / LLM.example.env              # GEMINI_*
+└── agent_sqlserver.env / .example.env     # MSSQL_AGENT_* (3b; real file gitignored)
 src/
 └── data/
     ├── ingest_supply_chain_dataset.py     # Phase 1
-    └── ingest_sop_pinecone.py             # Phase 3 (this file)
+    ├── ingest_sop_pinecone.py             # Phase 3a
+    └── setup_security_and_view.sql        # Phase 3b
 .cache/
 └── sop_ingest_cache.json                  # generated; gitignored
 ```
@@ -88,6 +95,38 @@ the heading-aware splitter) doesn't change any file's hash, so the cache will re
 with the previous chunking. Clearing the cache and the index is the manual fix when
 that happens.
 
+### Phase 3b: read-only agent access (schemas, views, ownership chaining)
+
+`dbo` and `ai` are two **schemas** (folders) in the one database `SupplyChainDb`. `dbo`
+holds the real tables; `ai` holds only views meant for the agent. The script
+`setup_security_and_view.sql` creates:
+
+- the login and user `USR_FDE_RO` (member of `public` only, no other roles),
+- the schema `ai`, owned by `dbo`,
+- the view `ai.VW_SUPPLY_CHAIN_READINGS`, which exposes all 26 columns under the
+  project's ubiquitous-language names instead of the legacy ones.
+
+`USR_FDE_RO` has `SELECT` on that one view and nothing else. Because the view and the
+table share an owner, SQL Server skips the permission check on the table when the view is
+read (**ownership chaining**) — the user can read through the view without any right to
+the table. `DENY`s on `dbo` and `ai` (write, alter, create, view definition) override any
+grant. The script is idempotent, takes the password from `envs/agent_sqlserver.env` as a
+`sqlcmd` variable, and ends with a self-check that impersonates the user and confirms one
+allowed read and five refused actions (raw-table `SELECT`, `DELETE`, `UPDATE`, `DROP`,
+`CREATE`).
+
+**Problems found while building it:**
+
+- The live table had a column literally named `"DELAY_PROB"` (quotes included), left by an
+  earlier loader version — `ensure_tables` only creates missing tables. Renamed with
+  `sp_rename`; a loader rerun had been broken by it too.
+- The Phase 2 design's `VW_ACTIVE_FLEET` (`Shipment_ID`, `Cargo_Type`) cannot exist: the
+  dataset has no such columns and holds hourly history. `research.md` was updated.
+- The legacy-to-friendly column mapping now lives in both Python (`LEGACY_COLUMN_NAMES`)
+  and SQL (the view) and must be kept in sync.
+- `SELECT`-only does not stop slow queries; row caps and timeouts belong in the text2sql
+  tool.
+
 ## Python Concepts — Quick Reference
 
 | Concept | Where used | What it's for |
@@ -106,6 +145,10 @@ that happens.
   becomes the canonical `source`/`file_type` vocabulary every chunk carries.
 - **Self-healing infrastructure** — `ensure_pinecone_index()` treats a dimension
   mismatch as a recoverable, expected state rather than a fatal error.
+- **Least privilege, enforced by the database** — Phase 2's read-only decision, now real:
+  the agent's identity is refused writes by SQL Server itself, not by application code.
+- **Anti-Corruption Layer, applied to security** — `ai.VW_SUPPLY_CHAIN_READINGS` is the
+  Phase 2 governed view: the agent sees only an approved, translated slice of the schema.
 - **Manifest pattern, simplified** — same new/changed/deleted logic designed in
   `phase-3-plan.md`, implemented against a local file instead of a database table. See
   [`domain-model.md`](domain-model.md) for this documented as a deliberate deviation.
@@ -116,6 +159,10 @@ that happens.
 uv sync
 make sop-ingest-dry-run
 make sop-ingest
+
+# 3b: needs the SQL Server container up and the table loaded (make ingest)
+cp envs/agent_sqlserver.example.env envs/agent_sqlserver.env   # set a strong password
+make agent-db-setup                                            # ends with six PASS lines
 ```
 
 ## What's Next
@@ -125,7 +172,9 @@ Implemented" section:
 
 - **RAG query tool** — the other half of the unstructured path: embed a question,
   search Pinecone, return matched chunks with source metadata to an agent.
-- **text2sql tool** — the structured path, via MCP, against a governed SQL Server view.
+- **text2sql tool** — the structured path, via MCP. The database side is done (3b): it
+  connects as `USR_FDE_RO` and queries only `ai.VW_SUPPLY_CHAIN_READINGS`. Still to build:
+  the tool itself, SQL validation/correction loop, row caps and query timeouts.
 - **Application layer (`resources/`)** — wraps both tools behind one interface.
 - **Agent orchestration** — the LangGraph loop deciding which tool a question needs.
 

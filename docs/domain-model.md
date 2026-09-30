@@ -6,10 +6,10 @@ Update this file whenever a domain/package changes, and keep
 
 ## Current State
 
-`src/data/` contains two modules:
+`src/data/` contains two Python modules and one SQL script:
 
 - `ingest_supply_chain_dataset.py` (Phase 1, complete) — raw CSV → local SQL Server.
-- `ingest_sop_pinecone.py` (Phase 3, in progress) — SOP documents → Pinecone vector
+- `ingest_sop_pinecone.py` (Phase 3a, complete) — SOP documents → Pinecone vector
   index. This covers **ingestion only** (parsing, chunking, embedding, incremental
   sync). The RAG *query* tool (question → embedding → Pinecone search → result), the
   text2sql tool, the `resources/` application layer, and the agent orchestration that
@@ -129,6 +129,26 @@ flowchart LR
 | Self-healing infrastructure | `ensure_pinecone_index()` detects a dimension mismatch (e.g. from switching embedding models) and recreates the index instead of failing opaquely |
 | Simplified manifest (deviation from the original design) | `phase-3-plan.md` designed the new/changed/deleted sync as a SQL Server table; the actual implementation uses a local JSON file (`.cache/`) instead — same hash-based logic, no shared/durable state. Acceptable for a single-operator script; would need revisiting if this becomes a scheduled or multi-operator job |
 
+## Phase 3b: Agent Security Layer (SQL)
+
+`setup_security_and_view.sql` is a SQL script, not Python, so there are no classes to
+diagram. What it creates inside `SupplyChainDb`:
+
+| Object | Role |
+| --- | --- |
+| `dbo.supply_chain_logistics` | Real table with legacy column names; written only by the Phase 1 loader |
+| `ai.VW_SUPPLY_CHAIN_READINGS` | View over that table, columns renamed to the ubiquitous-language names |
+| `USR_FDE_RO` (login + user) | The agent's identity: `SELECT` on the view only, everything else denied |
+
+Dependency direction: `USR_FDE_RO` -> `ai.VW_SUPPLY_CHAIN_READINGS` -> `dbo.supply_chain_logistics`.
+The user has no path to the table except through the view (ownership chaining).
+
+| Concept | Where |
+| --- | --- |
+| Anti-Corruption Layer | The view is the outbound counterpart of `LEGACY_COLUMN_NAMES`: the loader translates names in, the view translates them out. The mapping exists in both places and must be kept in sync |
+| Least privilege | `GRANT SELECT` on one object; `DENY` on `dbo` and `ai` schemas overrides any role or grant |
+| Packages as layers | Schema `ai` is the agent-facing layer, `dbo` the legacy layer |
+
 ## Planned, Not Yet Implemented
 
 What's left to reach the design in `research.md` / `technical-design-doc.html`:
@@ -137,8 +157,8 @@ What's left to reach the design in `research.md` / `technical-design-doc.html`:
   question, embed it with the same model used at indexing time, search the Pinecone
   index, and return the matched chunks with their source metadata. Ingestion (this
   file's Phase 3 section above) does not include this.
-- **text2sql tool** — the structured data path, via MCP, against a governed SQL Server
-  view rather than the raw table.
+- **text2sql tool** — the structured data path, via MCP. The governed view and read-only
+  user it will use exist (Phase 3b); the tool itself does not.
 - **Application layer (`resources/`)** — wraps both tools behind one interface the
   agent calls.
 - **Agent orchestration** — the LangGraph ReAct loop that decides which tool a

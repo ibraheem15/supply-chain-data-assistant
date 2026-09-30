@@ -54,11 +54,12 @@
   </div>
 
   <h2>Current State</h2>
-  <p><code>src/data/</code> contains two modules: <code>ingest_supply_chain_dataset.py</code>
-  (Phase 1, complete) and <code>ingest_sop_pinecone.py</code> (Phase 3, in progress — covers
+  <p><code>src/data/</code> contains two Python modules and one SQL script: <code>ingest_supply_chain_dataset.py</code>
+  (Phase 1, complete), <code>ingest_sop_pinecone.py</code> (Phase 3a, complete — covers
   <strong>ingestion only</strong>: parsing, chunking, embedding, incremental sync. The RAG
   <em>query</em> tool, the text2sql tool, the <code>resources/</code> application layer, and the
-  agent orchestration are not built yet — see the last section below).</p>
+  agent orchestration are not built yet — see the last section below), and
+  <code>setup_security_and_view.sql</code> (Phase 3b, complete).</p>
 
   <h2>Phase 1: Structured Data Ingestion</h2>
   <h3>Class Diagram</h3>
@@ -259,6 +260,25 @@
     <tr><td>Simplified manifest (deviation from the original design)</td><td><code>phase-3-plan.md</code> designed the sync as a SQL Server table; the actual implementation uses a local JSON file instead — same hash-based logic, no shared/durable state. Fine for a single-operator script; would need revisiting for a scheduled or multi-operator job</td></tr>
   </table>
 
+  <h2>Phase 3b: Agent Security Layer (SQL)</h2>
+  <p><code>setup_security_and_view.sql</code> is a SQL script, not Python, so there are no classes to
+  diagram. What it creates inside <code>SupplyChainDb</code>:</p>
+  <table>
+    <tr><th>Object</th><th>Role</th></tr>
+    <tr><td><code>dbo.supply_chain_logistics</code></td><td>Real table with legacy column names; written only by the Phase 1 loader</td></tr>
+    <tr><td><code>ai.VW_SUPPLY_CHAIN_READINGS</code></td><td>View over that table, columns renamed to the ubiquitous-language names</td></tr>
+    <tr><td><code>USR_FDE_RO</code> (login + user)</td><td>The agent's identity: <code>SELECT</code> on the view only, everything else denied</td></tr>
+  </table>
+  <p>Dependency direction: <code>USR_FDE_RO</code> &rarr; <code>ai.VW_SUPPLY_CHAIN_READINGS</code> &rarr;
+  <code>dbo.supply_chain_logistics</code>. The user has no path to the table except through the view
+  (ownership chaining).</p>
+  <table>
+    <tr><th>Concept</th><th>Where</th></tr>
+    <tr><td>Anti-Corruption Layer</td><td>The view is the outbound counterpart of <code>LEGACY_COLUMN_NAMES</code>: the loader translates names in, the view translates them out. The mapping exists in both places and must be kept in sync</td></tr>
+    <tr><td>Least privilege</td><td><code>GRANT SELECT</code> on one object; <code>DENY</code> on the <code>dbo</code> and <code>ai</code> schemas overrides any role or grant</td></tr>
+    <tr><td>Packages as layers</td><td>Schema <code>ai</code> is the agent-facing layer, <code>dbo</code> the legacy layer</td></tr>
+  </table>
+
   <h2>Planned, Not Yet Implemented</h2>
   <p>What's left to reach the design in <a href="research.md">research.md</a> /
   <a href="technical-design-doc.html">technical-design-doc.html</a>:</p>
@@ -266,8 +286,8 @@
     <li><strong>RAG query tool</strong> — take a user's question, embed it with the same model used
     at indexing time, search the Pinecone index, and return matched chunks with source metadata.
     Ingestion (above) does not include this.</li>
-    <li><strong>text2sql tool</strong> — the structured data path, via MCP, against a governed SQL
-    Server view rather than the raw table.</li>
+    <li><strong>text2sql tool</strong> — the structured data path, via MCP. The governed view and
+    read-only user it will use exist (Phase 3b); the tool itself does not.</li>
     <li><strong>Application layer (<code>resources/</code>)</strong> — wraps both tools behind one
     interface the agent calls.</li>
     <li><strong>Agent orchestration</strong> — the LangGraph ReAct loop that decides which tool a

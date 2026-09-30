@@ -150,5 +150,5 @@ Phase 2 — Solution Exploration. The business case and initial technical design
 are drafted in [`technical-design-doc.html`](technical-design-doc.html) and
 [`business-pitch.html`](business-pitch.html), with supporting notes in
 [`research.md`](research.md) — none of that is implemented yet. See
-[`domain-model.md`](domain-model.md) for the current (Phase 1-only) class and
-dependency diagram; it will grow as the text2sql tool and the SOP RAG pipeline get built.
+[`domain-model.md`](domain-model.md) for the current class and dependency diagrams,
+which have since grown to cover the Phase 3 SOP ingestion and agent security layer.

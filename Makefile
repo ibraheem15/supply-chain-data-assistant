@@ -1,4 +1,4 @@
-.PHONY: install lock sync lint format test ingest-dry-run ingest sop-ingest-dry-run sop-ingest sqlserver-up sqlserver-down clean
+.PHONY: install lock sync lint format test ingest-dry-run ingest sop-ingest-dry-run sop-ingest agent-db-setup sqlserver-up sqlserver-down clean
 
 install: lock sync
 
@@ -28,6 +28,12 @@ sop-ingest-dry-run:
 
 sop-ingest:
 	uv run python src/data/ingest_sop_pinecone.py
+
+agent-db-setup:
+	@set -a; . envs/legacy_sqlserver.env; . envs/agent_sqlserver.env; set +a; \
+	docker exec -i legacy-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa \
+		-P "$$MSSQL_SA_PASSWORD" -v DbName=SupplyChainDb AgentPassword="$$MSSQL_AGENT_PASSWORD" \
+		< src/data/setup_security_and_view.sql
 
 sqlserver-up:
 	docker run \

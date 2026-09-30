@@ -109,3 +109,105 @@ on a rerun and cost nothing: no embedding call, no vector-DB write.
   idempotent CLI command (`make sop-ingest`, mirroring Phase 1's `make ingest`) run on
   demand is consistent with how Phase 1 already works, and is enough until there's a
   real need for continuous sync.
+
+# Phase 3b: Agent Security Layer (Read-Only User + Semantic View)
+
+**Status: complete.** Implemented in `src/data/setup_security_and_view.sql`, run with
+`make agent-db-setup`, and verified by the script's built-in self-check.
+
+## Goal
+
+Give the future text2sql tool a database identity that can read approved data and
+nothing else. Security is enforced by SQL Server itself, so a bad prompt or a wrong
+generated query cannot modify data, however it was produced (Phase 2 decision; see
+`research.md`, Security).
+
+## What gets created
+
+| Object | Purpose |
+| --- | --- |
+| Login + user `USR_FDE_RO` | The agent's identity. Member of `public` only, no other roles |
+| Schema `ai` (owned by `dbo`) | Home for agent-facing views, kept separate from the legacy `dbo` tables |
+| View `ai.VW_SUPPLY_CHAIN_READINGS` | `dbo.supply_chain_logistics` with legacy names translated to the project's ubiquitous-language names (`IOT_TEMP_C` becomes `iot_temperature`) |
+
+```
+USR_FDE_RO --SELECT--> ai.VW_SUPPLY_CHAIN_READINGS --(ownership chain)--> dbo.supply_chain_logistics
+USR_FDE_RO --any other access--> denied
+```
+
+## Schemas: `dbo` vs `ai`
+
+`dbo` and `ai` are two **schemas** (folders) inside the one database, `SupplyChainDb`,
+not two databases. Think of the database as a building and schemas as floors.
+
+| Schema | Analogy | Holds | Used by |
+| --- | --- | --- | --- |
+| `dbo` | Ground floor | The real data: `supply_chain_logistics`, the staging table | The legacy system and our loader |
+| `ai` | Reception desk | Only **views** (saved `SELECT` queries that store no data) | The agent |
+
+Why separate them:
+
+1. **Clear boundary.** Anything in `ai` is meant for the agent; anything in `dbo` is not.
+2. **Safe growth.** A table added to `dbo` later is never visible to the agent by
+   accident. Only something deliberately placed in `ai` and explicitly granted is.
+3. **Translation.** The view renames terse legacy columns (`IOT_TEMP_C` becomes
+   `iot_temperature`), so the agent never sees the legacy names.
+
+## What `USR_FDE_RO` can do
+
+| Action | Allowed? |
+| --- | --- |
+| `SELECT` from `ai.VW_SUPPLY_CHAIN_READINGS` | Yes, the only thing it can do |
+| `SELECT` from `dbo.supply_chain_logistics` | No |
+| Insert, update or delete, even through the view | No |
+| Drop or create tables, views or schemas | No |
+
+The view can read the table even though the user cannot, because SQL Server lets the
+view's owner (`dbo`) read the table on the user's behalf. Like a bank teller who shows
+you your balance without handing you the vault key.
+
+## How it works
+
+- **Ownership chaining.** The view and the table share an owner (`dbo`), so SQL Server
+  does not check the user's permissions on the table when the view is read. The user
+  needs `SELECT` on the view only.
+- **Grant narrow, deny broad.** `GRANT SELECT` is on the single view, not the schema, so
+  a view added later is not exposed by accident. `DENY` on `dbo` (select, write,
+  execute, alter, view definition) and on `ai` (write, alter), plus `DENY CREATE ...`,
+  overrides any role or grant. `DENY` does not break the view, because chained access
+  skips the check.
+- **The view is the second Anti-Corruption Layer.** The Python loader's
+  `LEGACY_COLUMN_NAMES` translates names going in; the view translates them coming out.
+  The mapping now lives in two places (Python and SQL) and must be kept in sync.
+- **Secrets stay out of the script.** The password arrives as a `sqlcmd` variable from
+  `envs/agent_sqlserver.env` (gitignored; template in `agent_sqlserver.example.env`).
+  The script is idempotent and re-running it rotates the password.
+- **Self-check built in.** The script ends by impersonating the agent (`EXECUTE AS USER`)
+  and asserts: view `SELECT` works; raw-table `SELECT`, `DELETE`/`UPDATE` through the
+  view, `DROP TABLE` and `CREATE TABLE` are all refused. Any failure aborts with an error.
+
+## Run
+
+```bash
+cp envs/agent_sqlserver.example.env envs/agent_sqlserver.env   # set a strong password, no single quotes
+make sqlserver-up && make ingest                               # table must exist first
+make agent-db-setup
+```
+
+Expected output ends with six `PASS` lines and `All security checks passed.`
+
+`sqlcmd` runs inside the container (`docker exec`), so no host SQL client is needed.
+
+## Known limits (deliberately not solved here)
+
+- **Design drift.** `research.md` and the TDD name the view `VW_ACTIVE_FLEET` with
+  `Shipment_ID`, `Cargo_Type`, `Current_Temperature`. The dataset has no shipment id or
+  cargo type and holds hourly historical readings, so that view cannot exist. The
+  implemented view is `VW_SUPPLY_CHAIN_READINGS`; `research.md` has been updated to match.
+- **`SELECT`-only does not stop expensive queries.** A `SELECT *` or a cross join can
+  still be slow. Row caps and query timeouts belong in the text2sql tool (next step).
+- **No audit log yet.** `AgentAuditLog` from the TDD is not part of this phase.
+- **Dev-only secret handling.** The password is visible in the process list while
+  `docker exec` runs. Acceptable locally; a client deployment would use a secret store.
+- **Local only.** Like Phase 1, this targets the local Docker instance, not the
+  client's server.
