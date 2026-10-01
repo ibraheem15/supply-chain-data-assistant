@@ -8,7 +8,7 @@ An agentic AI chat interface over a legacy SQL Server supply-chain dataset. See 
 | --- | --- | --- |
 | 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md), [`docs/phase1-notes.md`](docs/phase1-notes.md) |
 | 2 — Solution exploration | Complete: business case and technical design (HLD/LLD) drafted; some LLD items (chunking strategy, SOP ingestion pipeline) deferred to Phase 3 | [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), [`docs/business-pitch.html`](docs/business-pitch.html), [`docs/phase2-notes.md`](docs/phase2-notes.md) |
-| 3 — Implementation | In progress: SOP ingestion pipeline (3a) and read-only agent user + semantic view (3b) complete; RAG query tool, text2sql tool, `resources/` app layer, and agent orchestration not started | [`docs/phase3-notes.md`](docs/phase3-notes.md), [`docs/phase-3-plan.md`](docs/phase-3-plan.md) |
+| 3 — Implementation | In progress: SOP ingestion (3a), read-only agent user + semantic view (3b) and the three agent tools behind an MCP server (3c) complete; agent orchestration, UI and audit log not started | [`docs/phase3-notes.md`](docs/phase3-notes.md), [`docs/phase-3-plan.md`](docs/phase-3-plan.md) |
 
 ## Prerequisites
 
@@ -32,9 +32,10 @@ This creates `.venv` and installs the locked dependencies from `uv.lock`.
 | `make sqlserver-up` / `make sqlserver-down` | Start / stop the local Docker SQL Server |
 | `make ingest-dry-run` | Validate the raw CSV without connecting to SQL Server |
 | `make ingest` | Load the validated CSV into the local SQL Server |
+| `make mcp-server` | Run the MCP server (three agent tools) over stdio |
 | `make agent-db-setup` | Create the read-only agent user and `ai.VW_SUPPLY_CHAIN_READINGS` view (needs `envs/agent_sqlserver.env`) |
 | `make lint` / `make format` | Ruff lint / format |
-| `make test` | Run the test suite |
+| `make test` | Run the offline unit tests (`uv run pytest -m integration` runs the live SQL Server/Pinecone tests) |
 
 See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthrough, including `envs/legacy_sqlserver.env` setup.
 
@@ -65,11 +66,19 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   ├── technical-design-doc.html   # Phase 2 TDD draft (HLD/LLD) — not yet implemented
 │   ├── business-pitch.html         # Phase 2 business case draft
 │   ├── phase2-notes.md             # Phase 2 retrospective and items deferred to Phase 3
-│   ├── phase-3-plan.md             # Phase 3 design: SOP ingestion (3a) and agent security layer (3b)
-│   └── phase3-notes.md             # Phase 3 retrospective so far: SOP ingestion and agent security layer
-└── src/
-    └── data/
-        ├── ingest_supply_chain_dataset.py  # CSV -> SQL Server loader
-        ├── ingest_sop_pinecone.py          # SOP documents -> Pinecone (Phase 3a)
-        └── setup_security_and_view.sql     # Read-only agent user + semantic view (Phase 3b)
+│   ├── phase-3-plan.md             # Phase 3 design: SOP ingestion (3a), agent security layer (3b), agent tools (3c)
+│   └── phase3-notes.md             # Phase 3 retrospective so far: SOP ingestion, agent security layer, agent tools
+├── src/
+│   ├── data/
+│   │   ├── ingest_supply_chain_dataset.py  # CSV -> SQL Server loader
+│   │   ├── ingest_sop_pinecone.py          # SOP documents -> Pinecone (Phase 3a)
+│   │   └── setup_security_and_view.sql     # Read-only agent user + semantic view (Phase 3b)
+│   └── resources/                          # Agent tools, application layer (Phase 3c)
+│       ├── settings.py                     # Reads envs/*.env
+│       ├── schema_context.py               # View description + legacy glossary for the LLM
+│       ├── sql_tool.py                     # query_telemetry_data
+│       ├── weather_tool.py                 # fetch_weather_conditions
+│       ├── sop_tool.py                     # search_compliance_sop
+│       └── mcp_server.py                   # Exposes the three tools over MCP (stdio)
+└── tests/                                  # Unit tests; integration tests need live services
 ```

@@ -6,14 +6,16 @@ Update this file whenever a domain/package changes, and keep
 
 ## Current State
 
-`src/data/` contains two Python modules and one SQL script:
+`src/data/` contains two Python modules and one SQL script, and `src/resources/` holds the
+agent's tools (Phase 3c):
 
 - `ingest_supply_chain_dataset.py` (Phase 1, complete) — raw CSV → local SQL Server.
 - `ingest_sop_pinecone.py` (Phase 3a, complete) — SOP documents → Pinecone vector
-  index. This covers **ingestion only** (parsing, chunking, embedding, incremental
-  sync). The RAG *query* tool (question → embedding → Pinecone search → result), the
-  text2sql tool, the `resources/` application layer, and the agent orchestration that
-  picks between them are **not built yet** — see the last section below.
+  index (parsing, chunking, embedding, incremental sync).
+- `setup_security_and_view.sql` (Phase 3b, complete) — read-only agent user and view.
+- `src/resources/` (Phase 3c, complete) — three agent tools behind one MCP server. The
+  agent orchestration that picks between them is **not built yet** — see the last
+  section below.
 
 ## Phase 1: Structured Data Ingestion
 
@@ -149,19 +151,38 @@ The user has no path to the table except through the view (ownership chaining).
 | Least privilege | `GRANT SELECT` on one object; `DENY` on `dbo` and `ai` schemas overrides any role or grant |
 | Packages as layers | Schema `ai` is the agent-facing layer, `dbo` the legacy layer |
 
+## Phase 3c: Agent Tools (`src/resources/`)
+
+The application layer. Each tool is a plain function returning
+`{"status": "ok" | "error" | "unavailable", ...}`; `mcp_server.py` is a thin wrapper that
+registers them.
+
+```mermaid
+flowchart LR
+    Agent["Agent (3d, not built)"] -->|MCP stdio| Server["mcp_server.py"]
+    Server --> SQL["query_telemetry_data\nsqlglot validation, 200 row cap, 15s timeout"]
+    Server --> Weather["fetch_weather_conditions\n10s timeout, one retry"]
+    Server --> SOP["search_compliance_sop\nsame embedding model as indexing"]
+    Context["schema_context.py\ncolumn docs + legacy glossary"] --> Server
+    SQL -->|"USR_FDE_RO"| View[("ai.VW_SUPPLY_CHAIN_READINGS")]
+    Weather --> OpenMeteo["Open-Meteo REST API"]
+    SOP -->|"build_embeddings()"| Pinecone[("Pinecone index")]
+```
+
+| Concept | Where |
+| --- | --- |
+| Interface as Contract | The shared `ok`/`error`/`unavailable` result shape: expected failures are data the agent can act on, never exceptions |
+| Defence in depth | `validate_sql()` and the row/time caps sit on top of the Phase 3b database permissions |
+| Dependency direction | Tools depend on stores (SQL Server, Pinecone, HTTP); nothing in `src/data/` depends on tools. `sop_tool` imports `build_embeddings` from `data/` so query and index embeddings cannot diverge |
+| Ubiquitous Language | `schema_context.py` generates the legacy-to-business glossary from `LEGACY_COLUMN_NAMES`, so the SOP's legacy names resolve to the names the agent can query |
+| Packages as layers | `resources/` is the application layer between the agent and the data layer |
+
 ## Planned, Not Yet Implemented
 
 What's left to reach the design in `research.md` / `technical-design-doc.html`:
 
-- **RAG query tool** — the other half of the unstructured path: take a user's
-  question, embed it with the same model used at indexing time, search the Pinecone
-  index, and return the matched chunks with their source metadata. Ingestion (this
-  file's Phase 3 section above) does not include this.
-- **text2sql tool** — the structured data path, via MCP. The governed view and read-only
-  user it will use exist (Phase 3b); the tool itself does not.
-- **Application layer (`resources/`)** — wraps both tools behind one interface the
-  agent calls.
 - **Agent orchestration** — the LangGraph ReAct loop that decides which tool a
-  question needs.
+  question needs, calling the 3c tools over MCP.
+- **Streamlit UI** and the **audit log** (`AgentAuditLog`).
 
 Until that code exists, this section stays a pointer, not a diagram.

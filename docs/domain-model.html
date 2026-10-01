@@ -54,12 +54,11 @@
   </div>
 
   <h2>Current State</h2>
-  <p><code>src/data/</code> contains two Python modules and one SQL script: <code>ingest_supply_chain_dataset.py</code>
-  (Phase 1, complete), <code>ingest_sop_pinecone.py</code> (Phase 3a, complete — covers
-  <strong>ingestion only</strong>: parsing, chunking, embedding, incremental sync. The RAG
-  <em>query</em> tool, the text2sql tool, the <code>resources/</code> application layer, and the
-  agent orchestration are not built yet — see the last section below), and
-  <code>setup_security_and_view.sql</code> (Phase 3b, complete).</p>
+  <p><code>src/data/</code> contains two Python modules and one SQL script, and <code>src/resources/</code>
+  holds the agent's tools (Phase 3c, complete): <code>ingest_supply_chain_dataset.py</code>
+  (Phase 1, complete), <code>ingest_sop_pinecone.py</code> (Phase 3a, complete: parsing, chunking, embedding, incremental sync), and
+  <code>setup_security_and_view.sql</code> (Phase 3b, complete). The agent orchestration that picks
+  between the tools is not built yet — see the last section below.</p>
 
   <h2>Phase 1: Structured Data Ingestion</h2>
   <h3>Class Diagram</h3>
@@ -279,19 +278,32 @@
     <tr><td>Packages as layers</td><td>Schema <code>ai</code> is the agent-facing layer, <code>dbo</code> the legacy layer</td></tr>
   </table>
 
+  <h2>Phase 3c: Agent Tools (<code>src/resources/</code>)</h2>
+  <p>The application layer. Each tool is a plain function returning
+  <code>{"status": "ok" | "error" | "unavailable", ...}</code>; <code>mcp_server.py</code> is a thin
+  wrapper that registers them. Dependencies: <code>agent (3d, not built)</code> &rarr;
+  <code>mcp_server.py</code> &rarr; three tools. <code>query_telemetry_data</code> connects as
+  <code>USR_FDE_RO</code> to <code>ai.VW_SUPPLY_CHAIN_READINGS</code> (sqlglot validation, 200 row cap,
+  15s timeout); <code>fetch_weather_conditions</code> calls the Open-Meteo REST API (10s timeout, one
+  retry); <code>search_compliance_sop</code> queries Pinecone via <code>build_embeddings()</code>, the same
+  embedding model used at indexing time. <code>schema_context.py</code> supplies column docs and a legacy
+  glossary to the server.</p>
+  <table>
+    <tr><th>Concept</th><th>Where</th></tr>
+    <tr><td>Interface as Contract</td><td>The shared <code>ok</code>/<code>error</code>/<code>unavailable</code> result shape: expected failures are data the agent can act on, never exceptions</td></tr>
+    <tr><td>Defence in depth</td><td><code>validate_sql()</code> and the row/time caps sit on top of the Phase 3b database permissions</td></tr>
+    <tr><td>Dependency direction</td><td>Tools depend on stores (SQL Server, Pinecone, HTTP); nothing in <code>src/data/</code> depends on tools. <code>sop_tool</code> imports <code>build_embeddings</code> from <code>data/</code> so query and index embeddings cannot diverge</td></tr>
+    <tr><td>Ubiquitous Language</td><td><code>schema_context.py</code> generates the legacy-to-business glossary from <code>LEGACY_COLUMN_NAMES</code>, so the SOP's legacy names resolve to the names the agent can query</td></tr>
+    <tr><td>Packages as layers</td><td><code>resources/</code> is the application layer between the agent and the data layer</td></tr>
+  </table>
+
   <h2>Planned, Not Yet Implemented</h2>
   <p>What's left to reach the design in <a href="research.md">research.md</a> /
   <a href="technical-design-doc.html">technical-design-doc.html</a>:</p>
   <ul>
-    <li><strong>RAG query tool</strong> — take a user's question, embed it with the same model used
-    at indexing time, search the Pinecone index, and return matched chunks with source metadata.
-    Ingestion (above) does not include this.</li>
-    <li><strong>text2sql tool</strong> — the structured data path, via MCP. The governed view and
-    read-only user it will use exist (Phase 3b); the tool itself does not.</li>
-    <li><strong>Application layer (<code>resources/</code>)</strong> — wraps both tools behind one
-    interface the agent calls.</li>
     <li><strong>Agent orchestration</strong> — the LangGraph ReAct loop that decides which tool a
-    question needs.</li>
+    question needs, calling the 3c tools over MCP.</li>
+    <li><strong>Streamlit UI</strong> and the <strong>audit log</strong> (<code>AgentAuditLog</code>).</li>
   </ul>
   <p class="note">Until that code exists, this section stays a pointer, not a diagram.</p>
 </main>

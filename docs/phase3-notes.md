@@ -1,10 +1,10 @@
-# Phase 3 Notes: SOP Ingestion Pipeline and Agent Security Layer
+# Phase 3 Notes: SOP Ingestion, Agent Security Layer and Agent Tools
 
-**Status: Phase 3 is in progress, not complete.** This covers two pieces of it — the SOP
-ingestion pipeline (3a: chunking, embeddings, Pinecone vector store) and the agent's
-read-only database access (3b: least-privilege user and semantic view). The RAG query
-tool, the text2sql tool, the `resources/` application layer, and the agent orchestration
-are not built yet. See **What's Next** below.
+**Status: Phase 3 is in progress, not complete.** This covers three pieces of it: the SOP
+ingestion pipeline (3a), the agent's read-only database access (3b: least-privilege user
+and semantic view), and the three agent tools exposed through an MCP server (3c). The
+agent orchestration (LangGraph loop), the Streamlit UI and the audit log are not built
+yet. See **What's Next** below.
 
 ## What We Built
 
@@ -20,6 +20,10 @@ touching files that are new, changed, or deleted since the last run.
 Phase 3b, in one line: the agent gets a database login that can read one renamed view
 and nothing else.
 
+```
+3c: agent -> MCP server -> query_telemetry_data | fetch_weather_conditions | search_compliance_sop -> SQL Server view | Open-Meteo | Pinecone
+```
+
 ## File Structure
 
 ```
@@ -34,7 +38,16 @@ src/
 └── data/
     ├── ingest_supply_chain_dataset.py     # Phase 1
     ├── ingest_sop_pinecone.py             # Phase 3a
+    ├── __init__.py
     └── setup_security_and_view.sql        # Phase 3b
+└── resources/                             # Phase 3c: application layer
+    ├── settings.py                        # reads envs/*.env
+    ├── schema_context.py                  # view description + legacy glossary for the LLM
+    ├── sql_tool.py                        # query_telemetry_data
+    ├── weather_tool.py                    # fetch_weather_conditions
+    ├── sop_tool.py                        # search_compliance_sop
+    └── mcp_server.py                      # exposes the three tools over stdio
+tests/                                     # 45 unit tests + 2 integration tests
 .cache/
 └── sop_ingest_cache.json                  # generated; gitignored
 ```
@@ -127,6 +140,36 @@ allowed read and five refused actions (raw-table `SELECT`, `DELETE`, `UPDATE`, `
 - `SELECT`-only does not stop slow queries; row caps and timeouts belong in the text2sql
   tool.
 
+### Phase 3c: the agent's tools (`src/resources/`)
+
+Each tool is a plain Python function returning a dict, wrapped by one thin MCP server. All
+three follow one contract and **never raise to the agent**: `ok`, `error` (the input was
+wrong, the message says how to fix it, so the agent can retry) or `unavailable` (the backend
+failed, the agent must say the data is missing and not guess).
+
+- **`query_telemetry_data(sql)`**: the agent writes T-SQL. `sqlglot` parses it and accepts
+  exactly one plain `SELECT` from `ai.VW_SUPPLY_CHAIN_READINGS` only; it connects as
+  `USR_FDE_RO`, returns at most 200 rows (with a `truncated` flag), times out after 15
+  seconds, and returns the executed SQL with the rows. These checks give fast feedback;
+  the 3b database permissions remain the real boundary. `schema_context.py` gives the LLM
+  column meanings, units, the data range, and a legacy-to-business name glossary generated
+  from `LEGACY_COLUMN_NAMES` (the SOP quotes legacy names such as `IOT_TEMP_C`).
+- **`fetch_weather_conditions(latitude, longitude)`**: Open-Meteo `current=` values for one
+  point, 10 second timeout, one retry. `weather_disruption_level` is a labelled heuristic from
+  documented thresholds, not an operational measure. Current conditions only: it cannot be
+  compared with a historical reading's timestamp.
+- **`search_compliance_sop(query, top_k)`**: embeds the query with the same
+  `build_embeddings` the ingestion uses (so query and index embeddings match), searches
+  Pinecone, and returns text with `source` and `headings` for citation.
+
+**Problems found while building it:** `pyodbc` connection pooling reused a connection that
+still had unread rows from a capped query and failed the next call ("Connection is busy");
+fixed with `pyodbc.pooling = False`. `mcp` 2.x renamed `FastMCP` to `MCPServer`.
+
+**Accepted limits:** free-tier Open-Meteo (vehicle coordinates go to a third party); no MCP
+authentication (stdio, local only); single SOP file, so retrieval quality on a real library
+is untested; no audit log yet.
+
 ## Python Concepts — Quick Reference
 
 | Concept | Where used | What it's for |
@@ -135,6 +178,9 @@ allowed read and five refused actions (raw-table `SELECT`, `DELETE`, `UPDATE`, `
 | Generator function | `_batched()` | yields fixed-size slices without building every batch in memory at once |
 | Dict merge (`|`) | `_base_metadata(path) | {"page": ...}` | combines the shared metadata fields with format-specific ones into one new dict |
 | Late/local imports | `from pypdf import PdfReader` inside `parse_pdf()`, etc. | keeps heavy, format-specific dependencies (pypdf, openpyxl, sentence-transformers) from loading unless that code path actually runs |
+| Dependency injection by parameter | `fetch_weather_conditions(..., client=)` | tests pass a fake `httpx` client instead of calling the network |
+| `monkeypatch` (pytest) | `tests/` | swaps a function (e.g. `_connect`) for a fake for one test |
+| Test markers | `@pytest.mark.integration` | tests needing live services are skipped by default and run with `-m integration` |
 | Atomic file write | `save_cache()`: write to `.tmp`, then `Path.replace()` | `replace()` is atomic on POSIX — a crash mid-write can't leave a half-written, corrupted cache file |
 
 ## FDE / DDD Concepts
@@ -145,6 +191,11 @@ allowed read and five refused actions (raw-table `SELECT`, `DELETE`, `UPDATE`, `
   becomes the canonical `source`/`file_type` vocabulary every chunk carries.
 - **Self-healing infrastructure** — `ensure_pinecone_index()` treats a dimension
   mismatch as a recoverable, expected state rather than a fatal error.
+- **Tool contract / bounded interface**: three tools, one return shape, expected failures
+  returned as data. The agent never gets a raw database or HTTP connection.
+- **Defence in depth**: SQL validation and row/time caps in the tool, database permissions
+  underneath. Either alone would be weaker.
+- **Same model at index and query time**: the SOP tool reuses `build_embeddings`.
 - **Least privilege, enforced by the database** — Phase 2's read-only decision, now real:
   the agent's identity is refused writes by SQL Server itself, not by application code.
 - **Anti-Corruption Layer, applied to security** — `ai.VW_SUPPLY_CHAIN_READINGS` is the
@@ -163,6 +214,11 @@ make sop-ingest
 # 3b: needs the SQL Server container up and the table loaded (make ingest)
 cp envs/agent_sqlserver.example.env envs/agent_sqlserver.env   # set a strong password
 make agent-db-setup                                            # ends with six PASS lines
+
+# 3c
+make test                       # 45 offline unit tests
+uv run pytest -m integration    # live SQL Server + Pinecone checks
+make mcp-server                 # MCP server over stdio
 ```
 
 ## What's Next
@@ -170,13 +226,9 @@ make agent-db-setup                                            # ends with six P
 Still open in Phase 3, per [`domain-model.md`](domain-model.md)'s "Planned, Not Yet
 Implemented" section:
 
-- **RAG query tool** — the other half of the unstructured path: embed a question,
-  search Pinecone, return matched chunks with source metadata to an agent.
-- **text2sql tool** — the structured path, via MCP. The database side is done (3b): it
-  connects as `USR_FDE_RO` and queries only `ai.VW_SUPPLY_CHAIN_READINGS`. Still to build:
-  the tool itself, SQL validation/correction loop, row caps and query timeouts.
-- **Application layer (`resources/`)** — wraps both tools behind one interface.
-- **Agent orchestration** — the LangGraph loop deciding which tool a question needs.
+- **Agent orchestration** (Phase 3d): the LangGraph loop that decides which tool a question
+  needs, using the MCP server built in 3c, plus the audit log.
+- **Streamlit UI** over that agent.
 
 See [`research.md`](research.md) and [`technical-design-doc.html`](technical-design-doc.html)
 for that design.
