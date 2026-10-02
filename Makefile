@@ -1,4 +1,4 @@
-.PHONY: install lock sync lint format test ingest-dry-run ingest sop-ingest-dry-run sop-ingest agent-db-setup mcp-server sqlserver-up sqlserver-down clean
+.PHONY: install lock sync lint format test ingest-dry-run ingest sop-ingest-dry-run sop-ingest agent-db-setup mcp-server agent sqlserver-up sqlserver-down clean
 
 install: lock sync
 
@@ -34,6 +34,11 @@ agent-db-setup:
 	docker exec -i legacy-sqlserver /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa \
 		-P "$$MSSQL_SA_PASSWORD" -v DbName=SupplyChainDb AgentPassword="$$MSSQL_AGENT_PASSWORD" \
 		< src/data/setup_security_and_view.sql
+
+AGENT_ARGS ?=
+
+agent:
+	PYTHONPATH=src uv run python -m agent.cli $(AGENT_ARGS)
 
 mcp-server:
 	PYTHONPATH=src uv run python -m resources.mcp_server

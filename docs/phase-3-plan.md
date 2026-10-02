@@ -1,3 +1,6 @@
+**Status: Phase 3 is complete** (3a SOP ingestion, 3b agent security layer, 3c agent tools).
+The orchestration, audit log and UI moved to Phase 4: see [`phase-4-plan.md`](phase-4-plan.md).
+
 # SOP Ingestion
 
 data/policy will contain pdf, md, txt, csv, xlsx
@@ -214,7 +217,7 @@ Expected output ends with six `PASS` lines and `All security checks passed.`
   implemented view is `VW_SUPPLY_CHAIN_READINGS`; `research.md` has been updated to match.
 - **`SELECT`-only does not stop expensive queries.** A `SELECT *` or a cross join can
   still be slow. Row caps and query timeouts belong in the text2sql tool (next step).
-- **No audit log yet.** `AgentAuditLog` from the TDD is not part of this phase.
+- **No audit log yet.** `AgentAuditLog` from the TDD is not part of this phase (Phase 4b).
 - **Dev-only secret handling.** The password is visible in the process list while
   `docker exec` runs. Acceptable locally; a client deployment would use a secret store.
 - **Local only.** Like Phase 1, this targets the local Docker instance, not the
@@ -228,7 +231,7 @@ tests pass, and all three tools were called through the MCP server over stdio.
 ## Goal
 
 Build the three tools the agent will call, as plain, testable Python functions, and expose
-them through one MCP server. No agent, LLM or UI yet: that is Phase 3d. When 3c is done,
+them through one MCP server. No agent, LLM or UI yet: that is Phase 4. When 3c is done,
 every tool can be called and tested by hand with the agent absent.
 
 | Tool | Path | Backend |
@@ -248,7 +251,7 @@ every tool can be called and tested by hand with the agent absent.
 | "Congestion index"? | Dropped | Open-Meteo has no traffic or congestion data, so such an index would be invented. The tool returns raw weather values plus a labelled, derived `weather_disruption_level` |
 | HTTP client | `httpx` | Established, with timeouts built in |
 | SQL validation | `sqlglot` (T-SQL dialect) | A real parser beats regexes for "exactly one SELECT" |
-| MCP library | `mcp` (official Python SDK) | Standard way to expose tools. Installed version is 2.x, where `FastMCP` is renamed `MCPServer` (`mcp.server.mcpserver`) |
+| MCP library | `mcp` (official Python SDK) | Standard way to expose tools. Pinned to 1.x (`FastMCP`): `langchain-mcp-adapters`, used by the Phase 4 agent, does not work with 2.x (see `phase-4-plan.md`) |
 
 ## Layout
 
@@ -299,7 +302,7 @@ Runs one agent-written SQL query against `ai.VW_SUPPLY_CHAIN_READINGS`.
 1. Connect as `USR_FDE_RO`, using `envs/agent_sqlserver.env`. Never use `sa`.
 2. Parse with `sqlglot`. Accept exactly one statement that is a plain `SELECT`. Reject
    multiple statements, `SELECT ... INTO`, and anything else, with a clear message.
-3. Row cap: fetch at most `MAX_ROWS` (start at 200) and return `"truncated": true` if more
+3. Row cap: fetch at most `MAX_ROWS` (originally 200, lowered to 50 in Phase 4 for free-tier token limits, plus a 4,000-character cap) and return `"truncated": true` if more
    existed, so the agent knows to aggregate instead of listing.
 4. Timeout: a query timeout of 15 seconds; on expiry return `unavailable`.
 5. Return the executed SQL together with the results, so the agent can reason about its own
@@ -324,7 +327,7 @@ Calls Open-Meteo with `current=temperature_2m,wind_speed_10m,precipitation,weath
 
 - Validate `-90 <= latitude <= 90` and `-180 <= longitude <= 180`; otherwise `error`.
 - `httpx` timeout 10 seconds, one retry. On failure return `unavailable` and never a guess.
-- Output: `{"status", "latitude", "longitude", "observed_at", "temperature_c",
+- Output: `{"status", "latitude", "longitude", "observed_at", "observed_at_timezone", "temperature_c",
   "wind_speed_kmh", "precipitation_mm", "weather_code", "weather_disruption_level",
   "source"}`.
 - `weather_disruption_level` (`low`, `moderate`, `high`) is a labelled heuristic from simple
@@ -355,7 +358,7 @@ Semantic search over the SOP index from 3a.
 
 ## MCP server
 
-`mcp_server.py` registers the three functions with `MCPServer`. Tool descriptions are part of
+`mcp_server.py` registers the three functions with `FastMCP`. Tool descriptions are part of
 the contract: they tell the LLM when to use each tool, what the inputs mean, and each tool's
 limits. Run over stdio for local development.
 
@@ -378,7 +381,8 @@ make mcp-server                  # starts the MCP server over stdio
   `pyodbc.pooling = False`; a live test now runs a query right after a truncated one.
 - **Raw ODBC errors were unreadable** for an LLM. Messages are reduced to the server's own
   text, e.g. `Invalid column name 'bogus'. (207)`.
-- **`mcp` 2.x** renamed `FastMCP` to `MCPServer`. The f-string tool description is passed as
+- **`mcp` 2.x** renamed `FastMCP` to `MCPServer`; it was first used, then pinned back to 1.x in
+  Phase 4 for adapter compatibility. The f-string tool description is passed as
   `description=` because an f-string cannot be a docstring.
 
 ## Test plan
@@ -395,7 +399,7 @@ so unit tests run offline. Weather tests mock HTTP, with one optional live smoke
 ## Known limits (deliberately not solved here)
 
 - **No audit log.** `AgentAuditLog` from the TDD is not part of 3c. It belongs with the agent
-  in 3d, where a decision cycle exists to log.
+  in Phase 4b, where a decision cycle exists to log.
 - **No MCP authentication.** Stdio only, local development only.
 - **Heuristic weather level.** A derived estimate, not an operational measure.
 - **Single SOP file.** Retrieval quality on a real SOP library is untested.

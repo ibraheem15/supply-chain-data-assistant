@@ -55,7 +55,7 @@
 
   <h2>Current State</h2>
   <p><code>src/data/</code> contains two Python modules and one SQL script, and <code>src/resources/</code>
-  holds the agent's tools (Phase 3c, complete): <code>ingest_supply_chain_dataset.py</code>
+  holds the agent's tools (Phase 3c, complete), and <code>src/agent/</code> holds the orchestrator (Phase 4a): <code>ingest_supply_chain_dataset.py</code>
   (Phase 1, complete), <code>ingest_sop_pinecone.py</code> (Phase 3a, complete: parsing, chunking, embedding, incremental sync), and
   <code>setup_security_and_view.sql</code> (Phase 3b, complete). The agent orchestration that picks
   between the tools is not built yet — see the last section below.</p>
@@ -159,7 +159,7 @@
     <tr><td>Dependency direction</td><td>Validation logic (<code>parse_csv</code>) depends on nothing infrastructure-related; only the database-facing functions depend on <code>pyodbc</code></td></tr>
   </table>
 
-  <h2>Phase 3 (In Progress): SOP Ingestion Pipeline</h2>
+  <h2>Phase 3a: SOP Ingestion Pipeline</h2>
   <h3>Class Diagram</h3>
   <div class="diagram">
     <svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg">
@@ -281,9 +281,9 @@
   <h2>Phase 3c: Agent Tools (<code>src/resources/</code>)</h2>
   <p>The application layer. Each tool is a plain function returning
   <code>{"status": "ok" | "error" | "unavailable", ...}</code>; <code>mcp_server.py</code> is a thin
-  wrapper that registers them. Dependencies: <code>agent (3d, not built)</code> &rarr;
+  wrapper that registers them. Dependencies: <code>agent (Phase 4a)</code> &rarr;
   <code>mcp_server.py</code> &rarr; three tools. <code>query_telemetry_data</code> connects as
-  <code>USR_FDE_RO</code> to <code>ai.VW_SUPPLY_CHAIN_READINGS</code> (sqlglot validation, 200 row cap,
+  <code>USR_FDE_RO</code> to <code>ai.VW_SUPPLY_CHAIN_READINGS</code> (sqlglot validation, 50 row cap,
   15s timeout); <code>fetch_weather_conditions</code> calls the Open-Meteo REST API (10s timeout, one
   retry); <code>search_compliance_sop</code> queries Pinecone via <code>build_embeddings()</code>, the same
   embedding model used at indexing time. <code>schema_context.py</code> supplies column docs and a legacy
@@ -297,13 +297,27 @@
     <tr><td>Packages as layers</td><td><code>resources/</code> is the application layer between the agent and the data layer</td></tr>
   </table>
 
+  <h2>Phase 4a: Agent Orchestrator (<code>src/agent/</code>)</h2>
+  <p>A LangGraph ReAct agent. <code>graph.py</code> is pure wiring (the LLM and tools are arguments);
+  <code>llm.py</code> builds the Gemini or Groq chat model, <code>tools.py</code> opens one persistent MCP session to
+  <code>mcp_server.py</code>, <code>prompts.py</code> holds the system prompt, and <code>cli.py</code> is the
+  terminal chat. Graph: <code>START</code> &rarr; <code>Reasoner</code> (LLM + system prompt); after the
+  Reasoner, a tool call goes to <code>Tools</code> (<code>ToolNode</code> over MCP), which returns to the
+  Reasoner, and no tool call goes to <code>END</code>.</p>
+  <table>
+    <tr><th>Concept</th><th>Where</th></tr>
+    <tr><td>Dependency direction</td><td><code>agent/</code> depends on <code>resources/</code> only through MCP; <code>resources/</code> knows nothing about the agent. <code>graph.py</code> depends on no I/O, so it is tested with a scripted fake LLM</td></tr>
+    <tr><td>Interface as Contract</td><td>The agent sees three MCP tools and their descriptions, never the Python functions or the database</td></tr>
+    <tr><td>State as the single source of truth</td><td>The message list is the graph state; the checkpointer (<code>MemorySaver</code>, one <code>thread_id</code> per chat) gives conversation memory</td></tr>
+    <tr><td>Packages as layers</td><td><code>agent/</code> is the orchestration layer above <code>resources/</code> (application layer) above <code>data/</code></td></tr>
+  </table>
+
   <h2>Planned, Not Yet Implemented</h2>
   <p>What's left to reach the design in <a href="research.md">research.md</a> /
-  <a href="technical-design-doc.html">technical-design-doc.html</a>:</p>
+  <a href="technical-design-doc.html">technical-design-doc.html</a>
+  (see <a href="phase-4-plan.md">phase-4-plan.md</a>):</p>
   <ul>
-    <li><strong>Agent orchestration</strong> — the LangGraph ReAct loop that decides which tool a
-    question needs, calling the 3c tools over MCP.</li>
-    <li><strong>Streamlit UI</strong> and the <strong>audit log</strong> (<code>AgentAuditLog</code>).</li>
+    <li><strong>Audit log (4b)</strong> (<code>AgentAuditLog</code>) and <strong>Streamlit UI (4c)</strong>.</li>
   </ul>
   <p class="note">Until that code exists, this section stays a pointer, not a diagram.</p>
 </main>

@@ -1,10 +1,10 @@
 # Phase 3 Notes: SOP Ingestion, Agent Security Layer and Agent Tools
 
-**Status: Phase 3 is in progress, not complete.** This covers three pieces of it: the SOP
-ingestion pipeline (3a), the agent's read-only database access (3b: least-privilege user
-and semantic view), and the three agent tools exposed through an MCP server (3c). The
-agent orchestration (LangGraph loop), the Streamlit UI and the audit log are not built
-yet. See **What's Next** below.
+**Status: Phase 3 is complete.** It covers the SOP ingestion pipeline (3a), the agent's
+read-only database access (3b: least-privilege user and semantic view), and the three agent
+tools exposed through an MCP server (3c). The remaining work originally listed under Phase 3
+(the LangGraph orchestration, the audit log and the Streamlit UI) moved to Phase 4, planned
+in [`phase-4-plan.md`](phase-4-plan.md). See **What's Next** below.
 
 ## What We Built
 
@@ -149,7 +149,7 @@ failed, the agent must say the data is missing and not guess).
 
 - **`query_telemetry_data(sql)`**: the agent writes T-SQL. `sqlglot` parses it and accepts
   exactly one plain `SELECT` from `ai.VW_SUPPLY_CHAIN_READINGS` only; it connects as
-  `USR_FDE_RO`, returns at most 200 rows (with a `truncated` flag), times out after 15
+  `USR_FDE_RO`, returns at most 50 rows and 4,000 characters (lowered from 200 rows in Phase 4 for free-tier token limits) (with a `truncated` flag), times out after 15
   seconds, and returns the executed SQL with the rows. These checks give fast feedback;
   the 3b database permissions remain the real boundary. `schema_context.py` gives the LLM
   column meanings, units, the data range, and a legacy-to-business name glossary generated
@@ -164,7 +164,8 @@ failed, the agent must say the data is missing and not guess).
 
 **Problems found while building it:** `pyodbc` connection pooling reused a connection that
 still had unread rows from a capped query and failed the next call ("Connection is busy");
-fixed with `pyodbc.pooling = False`. `mcp` 2.x renamed `FastMCP` to `MCPServer`.
+fixed with `pyodbc.pooling = False`. `mcp` 2.x renamed `FastMCP` to `MCPServer`; the project later pinned `mcp<2` (back to `FastMCP`)
+so the Phase 4 agent's `langchain-mcp-adapters` works.
 
 **Accepted limits:** free-tier Open-Meteo (vehicle coordinates go to a third party); no MCP
 authentication (stdio, local only); single SOP file, so retrieval quality on a real library
@@ -223,12 +224,12 @@ make mcp-server                 # MCP server over stdio
 
 ## What's Next
 
-Still open in Phase 3, per [`domain-model.md`](domain-model.md)'s "Planned, Not Yet
-Implemented" section:
+Phase 4, planned in [`phase-4-plan.md`](phase-4-plan.md), takes over the remaining work:
 
-- **Agent orchestration** (Phase 3d): the LangGraph loop that decides which tool a question
-  needs, using the MCP server built in 3c, plus the audit log.
-- **Streamlit UI** over that agent.
+- **4a, orchestrator**: a LangGraph ReAct agent (Gemini reasoner) that decides which tool a
+  question needs and calls the 3c tools through the MCP server, with a terminal chat.
+- **4b, audit log**: `AgentAuditLog`, append-only, written by a separate insert-only login.
+- **4c, Streamlit UI** over the same graph.
 
 See [`research.md`](research.md) and [`technical-design-doc.html`](technical-design-doc.html)
-for that design.
+for the underlying design.

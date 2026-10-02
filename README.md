@@ -8,7 +8,8 @@ An agentic AI chat interface over a legacy SQL Server supply-chain dataset. See 
 | --- | --- | --- |
 | 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md), [`docs/phase1-notes.md`](docs/phase1-notes.md) |
 | 2 — Solution exploration | Complete: business case and technical design (HLD/LLD) drafted; some LLD items (chunking strategy, SOP ingestion pipeline) deferred to Phase 3 | [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), [`docs/business-pitch.html`](docs/business-pitch.html), [`docs/phase2-notes.md`](docs/phase2-notes.md) |
-| 3 — Implementation | In progress: SOP ingestion (3a), read-only agent user + semantic view (3b) and the three agent tools behind an MCP server (3c) complete; agent orchestration, UI and audit log not started | [`docs/phase3-notes.md`](docs/phase3-notes.md), [`docs/phase-3-plan.md`](docs/phase-3-plan.md) |
+| 3 — Implementation | Complete: SOP ingestion (3a), read-only agent user + semantic view (3b), and the three agent tools behind an MCP server (3c) | [`docs/phase3-notes.md`](docs/phase3-notes.md), [`docs/phase-3-plan.md`](docs/phase-3-plan.md) |
+| 4 — Agent orchestration | In progress: LangGraph ReAct agent with a Gemini reasoner calling the Phase 3 tools via MCP (4a) implemented, with a terminal chat; audit log (4b) and Streamlit UI (4c) not started | [`docs/phase4-notes.md`](docs/phase4-notes.md), [`docs/phase-4-plan.md`](docs/phase-4-plan.md) |
 
 ## Prerequisites
 
@@ -32,6 +33,7 @@ This creates `.venv` and installs the locked dependencies from `uv.lock`.
 | `make sqlserver-up` / `make sqlserver-down` | Start / stop the local Docker SQL Server |
 | `make ingest-dry-run` | Validate the raw CSV without connecting to SQL Server |
 | `make ingest` | Load the validated CSV into the local SQL Server |
+| `make agent` | Chat with the agent in the terminal. Pass options with `AGENT_ARGS`, e.g. `make agent AGENT_ARGS="--provider groq --verbose"` (provider is Gemini by default, or Groq; `LLM_PROVIDER` in `envs/LLM.env` sets the default) |
 | `make mcp-server` | Run the MCP server (three agent tools) over stdio |
 | `make agent-db-setup` | Create the read-only agent user and `ai.VW_SUPPLY_CHAIN_READINGS` view (needs `envs/agent_sqlserver.env`) |
 | `make lint` / `make format` | Ruff lint / format |
@@ -67,18 +69,26 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   ├── business-pitch.html         # Phase 2 business case draft
 │   ├── phase2-notes.md             # Phase 2 retrospective and items deferred to Phase 3
 │   ├── phase-3-plan.md             # Phase 3 design: SOP ingestion (3a), agent security layer (3b), agent tools (3c)
-│   └── phase3-notes.md             # Phase 3 retrospective so far: SOP ingestion, agent security layer, agent tools
+│   ├── phase3-notes.md             # Phase 3 retrospective: SOP ingestion, agent security layer, agent tools
+│   ├── phase-4-plan.md             # Phase 4 plan: agent orchestration (4a, implemented), audit log (4b), UI (4c)
+│   └── phase4-notes.md             # Phase 4 retrospective so far: the orchestrator
 ├── src/
 │   ├── data/
 │   │   ├── ingest_supply_chain_dataset.py  # CSV -> SQL Server loader
 │   │   ├── ingest_sop_pinecone.py          # SOP documents -> Pinecone (Phase 3a)
 │   │   └── setup_security_and_view.sql     # Read-only agent user + semantic view (Phase 3b)
-│   └── resources/                          # Agent tools, application layer (Phase 3c)
-│       ├── settings.py                     # Reads envs/*.env
-│       ├── schema_context.py               # View description + legacy glossary for the LLM
-│       ├── sql_tool.py                     # query_telemetry_data
-│       ├── weather_tool.py                 # fetch_weather_conditions
-│       ├── sop_tool.py                     # search_compliance_sop
-│       └── mcp_server.py                   # Exposes the three tools over MCP (stdio)
+│   ├── resources/                          # Agent tools, application layer (Phase 3c)
+│   │   ├── settings.py                     # Reads envs/*.env
+│   │   ├── schema_context.py               # View description + legacy glossary for the LLM
+│   │   ├── sql_tool.py                     # query_telemetry_data
+│   │   ├── weather_tool.py                 # fetch_weather_conditions
+│   │   ├── sop_tool.py                     # search_compliance_sop
+│   │   └── mcp_server.py                   # Exposes the three tools over MCP (stdio)
+│   └── agent/                              # Orchestrator, Phase 4a
+│       ├── llm.py                          # Gemini or Groq chat model (temperature 0, one retry)
+│       ├── prompts.py                      # System prompt
+│       ├── tools.py                        # Persistent MCP session -> LangChain tools
+│       ├── graph.py                        # LangGraph ReAct wiring
+│       └── cli.py                          # Terminal chat
 └── tests/                                  # Unit tests; integration tests need live services
 ```

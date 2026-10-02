@@ -6,8 +6,8 @@ Update this file whenever a domain/package changes, and keep
 
 ## Current State
 
-`src/data/` contains two Python modules and one SQL script, and `src/resources/` holds the
-agent's tools (Phase 3c):
+`src/data/` contains two Python modules and one SQL script, `src/resources/` holds the
+agent's tools (Phase 3c), and `src/agent/` holds the orchestrator (Phase 4a):
 
 - `ingest_supply_chain_dataset.py` (Phase 1, complete) — raw CSV → local SQL Server.
 - `ingest_sop_pinecone.py` (Phase 3a, complete) — SOP documents → Pinecone vector
@@ -73,7 +73,7 @@ depend on `pyodbc` and the environment file.
 | Interface as Contract | `IngestionError` is the contract for "expected, actionable failure" vs. an unexpected bug |
 | Dependency direction | Validation logic (`parse_csv`) depends on nothing infrastructure-related; only the database-facing functions depend on `pyodbc` |
 
-## Phase 3 (In Progress): SOP Ingestion Pipeline
+## Phase 3a: SOP Ingestion Pipeline
 
 ### Class Diagram
 
@@ -159,8 +159,8 @@ registers them.
 
 ```mermaid
 flowchart LR
-    Agent["Agent (3d, not built)"] -->|MCP stdio| Server["mcp_server.py"]
-    Server --> SQL["query_telemetry_data\nsqlglot validation, 200 row cap, 15s timeout"]
+    Agent["agent (Phase 4a)"] -->|MCP stdio| Server["mcp_server.py"]
+    Server --> SQL["query_telemetry_data\nsqlglot validation, 50 row cap, 15s timeout"]
     Server --> Weather["fetch_weather_conditions\n10s timeout, one retry"]
     Server --> SOP["search_compliance_sop\nsame embedding model as indexing"]
     Context["schema_context.py\ncolumn docs + legacy glossary"] --> Server
@@ -177,12 +177,33 @@ flowchart LR
 | Ubiquitous Language | `schema_context.py` generates the legacy-to-business glossary from `LEGACY_COLUMN_NAMES`, so the SOP's legacy names resolve to the names the agent can query |
 | Packages as layers | `resources/` is the application layer between the agent and the data layer |
 
+## Phase 4a: Agent Orchestrator (`src/agent/`)
+
+A LangGraph ReAct agent. `graph.py` is pure wiring (the LLM and tools are arguments);
+`llm.py` builds the Gemini or Groq chat model, `tools.py` opens one persistent MCP session to `mcp_server.py`,
+`prompts.py` holds the system prompt, and `cli.py` is the terminal chat.
+
+```mermaid
+flowchart LR
+    S([START]) --> R["Reasoner\n(LLM + system prompt)"]
+    R -->|"tool call requested"| T["Tools\n(ToolNode over MCP)"]
+    R -->|"no tool call: final answer"| E([END])
+    T -->|"tool results"| R
+```
+
+| Concept | Where |
+| --- | --- |
+| Dependency direction | `agent/` depends on `resources/` only through MCP; `resources/` knows nothing about the agent. `graph.py` depends on no I/O, so it is tested with a scripted fake LLM |
+| Interface as Contract | The agent sees three MCP tools and their descriptions, never the Python functions or the database |
+| State as the single source of truth | The message list is the graph state; the checkpointer (`MemorySaver`, one `thread_id` per chat) gives conversation memory |
+| Packages as layers | `agent/` is the orchestration layer above `resources/` (application layer) above `data/` |
+
 ## Planned, Not Yet Implemented
 
-What's left to reach the design in `research.md` / `technical-design-doc.html`:
+What's left to reach the design in `research.md` / `technical-design-doc.html`
+(see [`phase-4-plan.md`](phase-4-plan.md)):
 
-- **Agent orchestration** — the LangGraph ReAct loop that decides which tool a
-  question needs, calling the 3c tools over MCP.
-- **Streamlit UI** and the **audit log** (`AgentAuditLog`).
+- **Audit log (4b)** (`AgentAuditLog`), written by a separate insert-only login.
+- **Streamlit UI (4c)** over the same graph.
 
 Until that code exists, this section stays a pointer, not a diagram.
