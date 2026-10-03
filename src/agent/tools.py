@@ -9,6 +9,7 @@ import sys
 # asynccontextmanager turns a generator function into something usable with `async with`.
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 # BaseTool is LangChain's tool abstraction: a name, a description the LLM reads, an input schema,
 # and a function to run. The Tools node executes these when the LLM asks for one.
@@ -24,9 +25,38 @@ from resources.settings import ROOT
 # Logical name for our MCP server inside the client (a key, like a service name in docker-compose).
 SERVER_NAME = "supply_chain"
 
+# Hugging Face's cache folder for the local embedding model (data/ingest_sop_pinecone.py defines the model
+# name, "sentence-transformers/all-MiniLM-L6-v2"; a test checks the two agree). It is spelled out here
+# on purpose: importing the ingestion module would load `transformers` (huge) into the UI process, which
+# slows start-up and makes Streamlit's file watcher walk every lazy transformers submodule.
+LOCAL_MODEL_CACHE_FOLDER = "models--sentence-transformers--all-MiniLM-L6-v2"
+
 
 # Describe HOW to launch the MCP server: a child process talking over stdio (stdin/stdout pipes,
 # like a subprocess you pipe to). Output: a dict keyed by server name, as the client expects.
+# True when the local embedding model is already downloaded to the Hugging Face cache.
+# Then the MCP server can run offline: no huggingface.co requests, no "unauthenticated" warning, and a
+# faster start. `make warm-models` downloads it once.
+def local_model_is_cached() -> bool:
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    return any((Path(HF_HUB_CACHE) / LOCAL_MODEL_CACHE_FOLDER / "snapshots").glob("*/config.json"))
+
+
+# Environment variables for the MCP server subprocess. Only what it needs is passed on.
+def server_env() -> dict[str, str]:
+    env = {
+        "PYTHONPATH": str(ROOT / "src"),
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+    }
+    if os.environ.get("HF_HOME"):
+        env["HF_HOME"] = os.environ["HF_HOME"]
+    if local_model_is_cached():
+        env["HF_HUB_OFFLINE"] = "1"
+    return env
+
+
 def server_config() -> dict:
     return {
         SERVER_NAME: {
@@ -38,13 +68,7 @@ def server_config() -> dict:
             "args": ["-m", "resources.mcp_server"],
             # The child gets a minimal, explicit environment (not a copy of ours), so secrets
             # in our env are not leaked to it.
-            "env": {
-                # ROOT / "src" uses Path's `/` operator to join paths; str() makes it plain text.
-                "PYTHONPATH": str(ROOT / "src"),
-                # os.environ is the env-var map; .get(k, "") avoids a KeyError when unset.
-                "PATH": os.environ.get("PATH", ""),
-                "HOME": os.environ.get("HOME", ""),
-            },
+            "env": server_env(),
         }
     }
 

@@ -1,7 +1,8 @@
 # Phase 4 Notes: Agent Orchestration
 
-**Status: Phase 4 is in progress.** 4a (the orchestrator) is built. 4b (audit log) and 4c
-(Streamlit UI) are not. See [`phase-4-plan.md`](phase-4-plan.md) for the design.
+**Status: Phase 4 is complete.** The orchestrator (4a) is built. The audit log and the Streamlit UI,
+originally planned here as 4b and 4c, moved to Phase 5 ([`phase5-plan.md`](phase5-plan.md)). See
+[`phase-4-plan.md`](phase-4-plan.md) for the design.
 
 ## What We Built
 
@@ -87,7 +88,7 @@ approximate tokens (characters / 4):
 | One SQL result | up to 200 rows | up to 50 rows and ~4,000 characters | `MAX_ROWS=50`, `MAX_RESULT_CHARS=4000`; `truncated` tells the model so it aggregates instead |
 | Tool result format | pretty-printed JSON | compact JSON | `mcp_server.py` returns `compact(result)`; the default indentation cost tokens on every result |
 | SOP search | 4 passages | 3 passages | default `top_k=3` |
-| Answer length | unbounded | 2,048 tokens | `MAX_OUTPUT_TOKENS` on both providers (bounds reasoning too, for reasoning models) |
+| Answer length | unbounded | 4,096 tokens | `MAX_OUTPUT_TOKENS` on both providers. Reasoning models count hidden reasoning toward it: 2,048 was first used and was too small (see `phase5-notes.md`), so it was raised to 4,096 and `reasoning_effort="low"` is set for the `gpt-oss` models |
 
 The schema context also stays under 2,600 characters (asserted by a test), and tests cover the window (current
 tool loop never trimmed, never starts on an orphan tool message, memory keeps everything).
@@ -216,7 +217,7 @@ project environment.
 ```bash
 uv sync
 make agent-db-setup && make sop-ingest      # data layer, once
-make test                                   # 71 offline tests
+make test                                   # offline tests
 make agent                                  # chat in the terminal
 make agent AGENT_ARGS="--provider groq --verbose"   # pick the provider, show each tool call
 uv run pytest -m integration                # live LLM (the chosen provider) + SQL Server + Pinecone
@@ -227,9 +228,10 @@ first (`make sqlserver-up`, or `docker start legacy-sqlserver` if it already exi
 
 ## What's Next
 
-- **4b, audit log**: `AgentAuditLog`, append-only, written by a second login that has `INSERT`
-  and nothing else, so SQL Server enforces "append-only".
-- **4c, Streamlit UI** over the same graph.
+- **Phase 5a, audit log**: `audit.AgentAuditLog`, written by a login that has `INSERT` and nothing
+  else, so SQL Server enforces "append-only"; read back through a separate read-only login.
+- **Phase 5b, Streamlit UI**: a single-chat UI with live tool-call cards and an audit viewer.
+  See [`phase5-plan.md`](phase5-plan.md).
 - **Quota planning.** A question that uses a tool costs at least two Gemini requests, so 20 a day is
   about ten questions. Run the live suite once per quota window, and use the scripted fake model
   for everything else. Moving to a paid tier or a second model removes this limit.

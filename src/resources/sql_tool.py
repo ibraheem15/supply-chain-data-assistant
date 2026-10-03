@@ -19,6 +19,7 @@ from sqlglot import exp
 from sqlglot.errors import SqlglotError
 
 from data.ingest_supply_chain_dataset import LEGACY_COLUMN_NAMES
+from resources.db import open_connection
 from resources.settings import AGENT_ENV_FILE, load_settings
 
 # Named logger for this tool.
@@ -124,56 +125,23 @@ def _clean_odbc_message(exc: Exception) -> str:
     return text.replace("(SQLExecDirectW)", "").strip()
 
 
-# Find an installed Microsoft ODBC driver name (18 preferred, then 17), as a JDBC app would pick a driver.
-# Input: none. Output: the driver name. Raises RuntimeError if neither is installed.
-def _pick_driver() -> str:
-    # Lazy import inside the function: pyodbc needs a system ODBC library, so it is only loaded when a
-    # database call is really made (importing this module stays safe without it).
-    import pyodbc
-
-    available = pyodbc.drivers()
-    # Iterating a tuple in preference order; the first installed one wins.
-    for candidate in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
-        if candidate in available:
-            return candidate
-    raise RuntimeError("No Microsoft ODBC Driver 17/18 for SQL Server is installed.")
-
-
 # Open a connection to SQL Server as the read-only agent user.
 # Input: merged settings dict (host, port, database, user, password). Output: a pyodbc connection.
 # Raises RuntimeError when the password is missing; query_telemetry_data reports that as "unavailable".
 def _connect(settings: dict[str, str]) -> Any:
-    # (Same lazy import as in _pick_driver.)
-    import pyodbc
-
-    # Setting a module attribute: pyodbc.pooling is a global switch, like turning off a JDBC connection
-    # pool.
-    # Pooled connections closed with unread rows are reused "busy" and fail the next query.
-    pyodbc.pooling = False
-    # Each .get(key, default) reads a setting, falling back to a local-Docker default when it is unset.
-    host = settings.get("MSSQL_HOST", "localhost")
-    port = settings.get("MSSQL_PORT", "1433")
-    database = settings.get("MSSQL_DATABASE", "SupplyChainDb")
     user = settings.get("MSSQL_AGENT_USER", "USR_FDE_RO")
     # No default for the password: it must be configured.
     password = settings.get("MSSQL_AGENT_PASSWORD")
     if not password:
         raise RuntimeError(f"MSSQL_AGENT_PASSWORD is missing. Set it in {AGENT_ENV_FILE}.")
-    # ODBC connection string (like a JDBC URL), built from adjacent f-string pieces inside parentheses.
-    # In an f-string, `{{` and `}}` are literal braces, and `{expr}` inserts a value. ODBC wraps values that
-    # may
-    # contain special characters in braces, so `{{{_pick_driver()}}}` renders as `{ODBC Driver 18 ...}`:
-    # two literal braces around one expression. The password is quoted the same way, and any `}` inside it
-    # is
-    # doubled (`replace('}', '}}')`), which is ODBC's escape rule.
-    connection_string = (
-        f"DRIVER={{{_pick_driver()}}};SERVER=tcp:{host},{port};DATABASE={database};"
-        f"UID={user};PWD={{{password.replace('}', '}}')}}};Encrypt=yes;TrustServerCertificate=yes;"
+    # The connection string, driver choice and pooling switch are shared with the audit code.
+    return open_connection(
+        settings,
+        user,
+        password,
+        login_timeout=LOGIN_TIMEOUT_SECONDS,
+        query_timeout=QUERY_TIMEOUT_SECONDS,
     )
-    # timeout= is the login timeout. autocommit=True: we only read, so no transaction is left open.
-    connection = pyodbc.connect(connection_string, timeout=LOGIN_TIMEOUT_SECONDS, autocommit=True)
-    connection.timeout = QUERY_TIMEOUT_SECONDS  # per-query timeout, in seconds
-    return connection
 
 
 # Convert one database value into something JSON can encode. Dates become ISO-8601 strings, Decimals become

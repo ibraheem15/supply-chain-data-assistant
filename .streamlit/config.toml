@@ -1,0 +1,35 @@
+# Light and dark themes. The page follows the operating system's setting by default; the viewer can
+# switch with the menu at the top right: Settings > Theme.
+[theme.light]
+primaryColor = "#1B4D89"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F5F9"
+textColor = "#1F2933"
+borderColor = "#D5DCE5"
+linkColor = "#1B4D89"
+codeBackgroundColor = "#EEF2F7"
+font = "sans serif"
+
+[theme.dark]
+primaryColor = "#7AB3F0"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#1A1F2B"
+textColor = "#E6EAF0"
+borderColor = "#2B3342"
+linkColor = "#8FC1FF"
+codeBackgroundColor = "#151A24"
+dataframeHeaderBackgroundColor = "#1A1F2B"
+font = "sans serif"
+
+[server]
+# The file watcher inspects every imported package. With transformers around it imported dozens of lazy
+# submodules and printed a torchvision error for each. The cost is no auto-reload on save: restart `make ui`.
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# "viewer" keeps the menu (it holds the theme switch) and hides developer options. "minimal" hid the whole
+# menu, which made dark mode unreachable.
+toolbarMode = "viewer"

@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ENV_DIR = ROOT / "envs"
 AGENT_ENV_FILE = ENV_DIR / "agent_sqlserver.env"
+AUDIT_ENV_FILE = ENV_DIR / "audit_sqlserver.env"
 VECTORDB_ENV_FILE = ENV_DIR / "vectorDB.env"
 LLM_ENV_FILE = ENV_DIR / "LLM.env"
 

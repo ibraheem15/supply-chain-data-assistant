@@ -9,13 +9,14 @@ This file provides guidance to AI Agents when working with code in this reposito
 ## Current State
 
 - **Phase 1 — Local SQL Server development environment:** complete. The local Docker SQL Server is running and the CSV has been validated and published to `dbo.supply_chain_logistics`. See [`docs/phase1-plan.md`](docs/phase1-plan.md) and [`docs/phase1-notes.md`](docs/phase1-notes.md) for the workflow and retrospective.
-- **Phase 2 — Solution exploration:** complete. Business case and technical design (HLD/LLD) drafted in [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), and [`docs/business-pitch.html`](docs/business-pitch.html) — see [`docs/phase2-notes.md`](docs/phase2-notes.md) for the retrospective and the items deferred to Phase 3 (chunking strategy, SOP-change handling, PDF/Markdown ingestion pipeline). None of this design is implemented yet.
+- **Phase 2 — Solution exploration:** complete. Business case and technical design (HLD/LLD) drafted in [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), and [`docs/business-pitch.html`](docs/business-pitch.html) — see [`docs/phase2-notes.md`](docs/phase2-notes.md) for the retrospective and the items deferred to Phase 3 (chunking strategy, SOP-change handling, PDF/Markdown ingestion pipeline). The design was implemented in Phases 3 to 5.
 - **Phase 3 — Implementation:** complete. The SOP ingestion pipeline (parsing, heading-aware chunking, local/Gemini embeddings, incremental Pinecone sync), the agent security layer (read-only `USR_FDE_RO` user, `ai.VW_SUPPLY_CHAIN_READINGS` view, `make agent-db-setup`) and the three agent tools in `src/resources/` (`query_telemetry_data`, `fetch_weather_conditions`, `search_compliance_sop`, exposed through an MCP server, `make mcp-server`) are built — see [`docs/phase3-notes.md`](docs/phase3-notes.md).
-- **Phase 4 — Agent orchestration:** in progress. 4a is implemented: a LangGraph ReAct agent (Gemini or Groq reasoner, toggled with `LLM_PROVIDER`) in `src/agent/` that calls the Phase 3 tools through the MCP server, run with `make agent` — see [`docs/phase4-notes.md`](docs/phase4-notes.md). Not yet built: the audit log (4b) and the Streamlit UI (4c) — see [`docs/phase-4-plan.md`](docs/phase-4-plan.md).
+- **Phase 4 — Agent orchestration:** complete. A LangGraph ReAct agent (Gemini or Groq reasoner, toggled with `LLM_PROVIDER`) in `src/agent/` that calls the Phase 3 tools through the MCP server, run with `make agent` — see [`docs/phase4-notes.md`](docs/phase4-notes.md).
+- **Phase 5 — Audit log and Streamlit UI:** complete. `audit.AgentAuditLog` is written by an insert-only login and read through a select-only login (`make audit-db-setup`); every turn is audited by a shared `run_turn()` used by both the CLI and a single-chat Streamlit UI in `src/ui/` with live tool cards and an audit viewer (`make ui`) — see [`docs/phase5-notes.md`](docs/phase5-notes.md).
 
 ## Architecture
 
-See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and dependency diagram of what is actually implemented (currently: Phase 1's ingestion module, the Phase 3 SOP ingestion module, the Phase 3b SQL security script, the Phase 3c `resources/` tools, and the Phase 4a `agent/` orchestrator).
+See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and dependency diagram of what is actually implemented (currently: Phase 1's ingestion module, the Phase 3 SOP ingestion module, the Phase 3b SQL security script, the Phase 3c `resources/` tools, the Phase 4a `agent/` orchestrator, and the Phase 5 audit log and `ui/`).
 
 **DDD concepts applied:** Ubiquitous Language, Entity vs Value Object, Interface as Contract, dependency direction, packages as layers, Application layer (resources/).
 
@@ -25,13 +26,15 @@ See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and d
 - `docs/phase1-plan.md` — Phase 1 scope and instructions for the local Docker SQL Server development environment
 - `docs/phase1-notes.md` — Phase 1 retrospective: what was built, Python/FDE/DDD concepts introduced
 - `docs/domain-model.md` / `docs/domain-model.html` — canonical class and dependency diagram, current implemented state only
-- `docs/technical-design-doc.html` — Phase 2 technical design draft (HLD/LLD); not yet implemented
+- `docs/technical-design-doc.html` — Phase 2 technical design draft (HLD/LLD); implemented in Phases 3 to 5
 - `docs/business-pitch.html` — Phase 2 business case draft
 - `docs/phase2-notes.md` — Phase 2 retrospective: decisions made, concepts introduced, items deferred to Phase 3
 - `docs/phase-3-plan.md` — Phase 3 design: SOP ingestion (3a), agent security layer (3b), agent tools (3c)
 - `docs/phase3-notes.md` — Phase 3 retrospective: SOP ingestion, agent security layer, agent tools
-- `docs/phase-4-plan.md` — Phase 4 plan: agent orchestration (4a, implemented), audit log (4b) and Streamlit UI (4c), not yet built
-- `docs/phase4-notes.md` — Phase 4 retrospective so far: the orchestrator
+- `docs/phase-4-plan.md` — Phase 4 plan: agent orchestration (implemented)
+- `docs/phase4-notes.md` — Phase 4 retrospective: the orchestrator
+- `docs/phase5-plan.md` — Phase 5 plan: audit log (5a) and Streamlit UI (5b)
+- `docs/phase5-notes.md` — Phase 5 retrospective: audit log, UI, runtime
 
 
 ## Who You Are Teaching

@@ -67,3 +67,19 @@ def test_missing_or_placeholder_settings_fail_clearly(settings, provider):
 def test_output_length_is_capped_for_both_providers():
     assert build_llm(BOTH).max_output_tokens == MAX_OUTPUT_TOKENS
     assert build_llm(BOTH, provider="groq").max_tokens == MAX_OUTPUT_TOKENS
+
+
+# reasoning_effort is only valid for the gpt-oss models; Groq answers 400 for any other model.
+def test_reasoning_effort_is_low_for_gpt_oss_and_absent_for_other_groq_models():
+    from agent.llm import REASONING_EFFORT
+
+    reasoning = build_llm({**BOTH, "GROQ_MODEL": "openai/gpt-oss-20b"}, provider="groq")
+    other = build_llm({**BOTH, "GROQ_MODEL": "llama-3.3-70b-versatile"}, provider="groq")
+    assert reasoning.reasoning_effort == REASONING_EFFORT == "low"
+    assert other.reasoning_effort is None
+
+
+# A live run spent all 2048 completion tokens on hidden reasoning and returned no answer, so the cap
+# must leave room for the report as well as the thinking.
+def test_output_cap_leaves_room_for_reasoning_and_the_report():
+    assert MAX_OUTPUT_TOKENS >= 4096

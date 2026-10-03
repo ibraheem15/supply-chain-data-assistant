@@ -1,5 +1,6 @@
 **Status: Phase 3 is complete** (3a SOP ingestion, 3b agent security layer, 3c agent tools).
-The orchestration, audit log and UI moved to Phase 4: see [`phase-4-plan.md`](phase-4-plan.md).
+The orchestration moved to Phase 4 ([`phase-4-plan.md`](phase-4-plan.md)); the audit log and UI to Phase 5
+([`phase5-plan.md`](phase5-plan.md)).
 
 # SOP Ingestion
 
@@ -217,7 +218,7 @@ Expected output ends with six `PASS` lines and `All security checks passed.`
   implemented view is `VW_SUPPLY_CHAIN_READINGS`; `research.md` has been updated to match.
 - **`SELECT`-only does not stop expensive queries.** A `SELECT *` or a cross join can
   still be slow. Row caps and query timeouts belong in the text2sql tool (next step).
-- **No audit log yet.** `AgentAuditLog` from the TDD is not part of this phase (Phase 4b).
+- **No audit log yet.** `AgentAuditLog` from the TDD is not part of this phase (Phase 5a).
 - **Dev-only secret handling.** The password is visible in the process list while
   `docker exec` runs. Acceptable locally; a client deployment would use a secret store.
 - **Local only.** Like Phase 1, this targets the local Docker instance, not the
@@ -399,7 +400,7 @@ so unit tests run offline. Weather tests mock HTTP, with one optional live smoke
 ## Known limits (deliberately not solved here)
 
 - **No audit log.** `AgentAuditLog` from the TDD is not part of 3c. It belongs with the agent
-  in Phase 4b, where a decision cycle exists to log.
+  in Phase 5a, where a decision cycle exists to log.
 - **No MCP authentication.** Stdio only, local development only.
 - **Heuristic weather level.** A derived estimate, not an operational measure.
 - **Single SOP file.** Retrieval quality on a real SOP library is untested.

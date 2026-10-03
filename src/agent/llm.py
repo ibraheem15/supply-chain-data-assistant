@@ -19,7 +19,11 @@ TEMPERATURE = 0  # repeatable tool choice and SQL generation
 MAX_RETRIES = 1  # free APIs: one retry for transient errors, no more
 # Seconds to wait for the provider before giving up on one request.
 TIMEOUT_SECONDS = 60
-MAX_OUTPUT_TOKENS = 2048  # bounds the answer (and, for reasoning models, the reasoning) per request
+# Bounds the whole completion per request. For reasoning models (gpt-oss, Gemini thinking) the hidden
+# reasoning counts toward it, so 2048 was too small: one live run spent all 2048 tokens thinking and returned
+# no visible answer. 4096 leaves room for the report; REASONING_EFFORT keeps the thinking short.
+MAX_OUTPUT_TOKENS = 4096
+REASONING_EFFORT = "low"
 
 
 # Custom exception type for bad/missing LLM settings. Subclassing Exception is like
@@ -67,13 +71,16 @@ def build_llm(settings: dict[str, str] | None = None, provider: str | None = Non
         from langchain_groq import ChatGroq
 
         # Keyword arguments (name=value) ~ a Java builder; order does not matter.
+        model = _require(settings, "GROQ_MODEL")
         return ChatGroq(
-            model=_require(settings, "GROQ_MODEL"),
+            model=model,
             api_key=_require(settings, "GROQ_API_KEY"),
             temperature=TEMPERATURE,
             max_retries=MAX_RETRIES,
             timeout=TIMEOUT_SECONDS,
             max_tokens=MAX_OUTPUT_TOKENS,
+            # Only the gpt-oss models accept this parameter; Groq rejects it for other models.
+            reasoning_effort=REASONING_EFFORT if "gpt-oss" in model else None,
         )
 
     # Reached only when provider == "gemini" (the `if` above returned already, so no `else` needed).
@@ -87,3 +94,10 @@ def build_llm(settings: dict[str, str] | None = None, provider: str | None = Non
         timeout=TIMEOUT_SECONDS,
         max_output_tokens=MAX_OUTPUT_TOKENS,
     )
+
+
+# (provider, model name) of a built chat model, for the audit log and the UI.
+def describe_llm(llm: BaseChatModel) -> tuple[str, str]:
+    provider = "groq" if "groq" in type(llm).__name__.lower() else "gemini"
+    model = getattr(llm, "model", None) or getattr(llm, "model_name", None) or ""
+    return provider, str(model)

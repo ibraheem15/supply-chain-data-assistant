@@ -7,10 +7,11 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 
-from agent.cli import OVERLOAD_MARKERS, QUOTA_MARKERS, ask, error_text
+from agent.cli import ask
 from agent.graph import build_graph
 from agent.llm import build_llm
 from agent.tools import mcp_tools
+from agent.turn import OVERLOAD_MARKERS, QUOTA_MARKERS, error_text
 
 # Module-level marker: applies `integration` to every test in this file (JUnit @Tag on the class).
 # Integration tests are skipped by default and need real services plus an API key.

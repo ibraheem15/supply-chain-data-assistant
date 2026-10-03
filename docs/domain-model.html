@@ -54,7 +54,7 @@
   </div>
 
   <h2>Current State</h2>
-  <p><code>src/data/</code> contains two Python modules and one SQL script, and <code>src/resources/</code>
+  <p><code>src/data/</code> contains two Python modules and two SQL scripts, and <code>src/resources/</code>
   holds the agent's tools (Phase 3c, complete), and <code>src/agent/</code> holds the orchestrator (Phase 4a): <code>ingest_supply_chain_dataset.py</code>
   (Phase 1, complete), <code>ingest_sop_pinecone.py</code> (Phase 3a, complete: parsing, chunking, embedding, incremental sync), and
   <code>setup_security_and_view.sql</code> (Phase 3b, complete). The agent orchestration that picks
@@ -312,14 +312,28 @@
     <tr><td>Packages as layers</td><td><code>agent/</code> is the orchestration layer above <code>resources/</code> (application layer) above <code>data/</code></td></tr>
   </table>
 
+  <h2>Phase 5: Audit Log (<code>src/agent/audit.py</code>, <code>turn.py</code>) and UI (<code>src/ui/</code>)</h2>
+  <p><code>run_turn()</code> runs one question through the graph and yields typed events; it also writes one
+  audit row per event. The CLI and the UI both consume it, so neither can skip the audit. Flow:
+  <code>cli.py</code> or <code>ui/app.py</code> (via <code>ui/runtime.py</code>, a background thread with its own
+  event loop) &rarr; <code>run_turn()</code> &rarr; <code>graph.py</code>; <code>run_turn()</code> &rarr;
+  <code>AuditLogger</code> (<code>USR_FDE_AUDIT_W</code>, INSERT only) &rarr; <code>audit.AgentAuditLog</code>
+  &rarr; <code>AuditReader</code> (<code>USR_FDE_AUDIT_R</code>, SELECT only) &rarr; the audit tab. The agent's own
+  SQL login <code>USR_FDE_RO</code> is denied on the whole <code>audit</code> schema.</p>
+  <table>
+    <tr><th>Concept</th><th>Where</th></tr>
+    <tr><td>Least privilege, separation of duties</td><td>Three logins: the agent acts (read-only on data, denied on <code>audit</code>), the writer records (<code>INSERT</code> only), the reader views (<code>SELECT</code> only)</td></tr>
+    <tr><td>Fail open, but loudly</td><td><code>AuditLogger</code> never raises: a failed write returns a message, the turn yields one <code>audit_warning</code>, and the agent carries on</td></tr>
+    <tr><td>One code path</td><td><code>run_turn()</code> is the only place a turn runs and is audited; <code>graph.py</code> stays free of I/O</td></tr>
+    <tr><td>Dependency direction</td><td><code>ui/</code> depends on <code>agent/</code>; <code>agent/</code> does not know the UI exists. <code>resources/db.py</code> is shared by the SQL tool and the audit code</td></tr>
+    <tr><td>Packages as layers</td><td><code>ui/</code> (presentation) over <code>agent/</code> (orchestration) over <code>resources/</code> (tools) over <code>data/</code></td></tr>
+  </table>
+
   <h2>Planned, Not Yet Implemented</h2>
-  <p>What's left to reach the design in <a href="research.md">research.md</a> /
-  <a href="technical-design-doc.html">technical-design-doc.html</a>
-  (see <a href="phase-4-plan.md">phase-4-plan.md</a>):</p>
-  <ul>
-    <li><strong>Audit log (4b)</strong> (<code>AgentAuditLog</code>) and <strong>Streamlit UI (4c)</strong>.</li>
-  </ul>
-  <p class="note">Until that code exists, this section stays a pointer, not a diagram.</p>
+  <p>Nothing from the original design in <a href="research.md">research.md</a> /
+  <a href="technical-design-doc.html">technical-design-doc.html</a> is left unbuilt. Known limits (see
+  <a href="phase5-notes.md">phase5-notes.md</a>): one user at a time, no login, a failed audit write is lost apart
+  from the warning, and the database owner can edit the audit table.</p>
 </main>
 </body>
 </html>

@@ -6,8 +6,9 @@ Update this file whenever a domain/package changes, and keep
 
 ## Current State
 
-`src/data/` contains two Python modules and one SQL script, `src/resources/` holds the
-agent's tools (Phase 3c), and `src/agent/` holds the orchestrator (Phase 4a):
+`src/data/` contains two Python modules and two SQL scripts, `src/resources/` holds the
+agent's tools (Phase 3c), `src/agent/` holds the orchestrator (Phase 4a) and the audit log (Phase 5a), and
+`src/ui/` holds the Streamlit UI (Phase 5b):
 
 - `ingest_supply_chain_dataset.py` (Phase 1, complete) — raw CSV → local SQL Server.
 - `ingest_sop_pinecone.py` (Phase 3a, complete) — SOP documents → Pinecone vector
@@ -198,12 +199,34 @@ flowchart LR
 | State as the single source of truth | The message list is the graph state; the checkpointer (`MemorySaver`, one `thread_id` per chat) gives conversation memory |
 | Packages as layers | `agent/` is the orchestration layer above `resources/` (application layer) above `data/` |
 
+## Phase 5: Audit Log (`src/agent/audit.py`, `turn.py`) and UI (`src/ui/`)
+
+`run_turn()` runs one question through the graph and yields typed events; it also writes one audit row
+per event. The CLI and the UI both consume it, so neither can skip the audit.
+
+```mermaid
+flowchart LR
+    CLI["cli.py"] --> Turn["run_turn()\nturn.py"]
+    UI["ui/app.py\nStreamlit page"] -->|"queue of events"| RT["ui/runtime.py\nbackground thread + event loop"]
+    RT --> Turn
+    Turn --> Graph["graph.py\nReasoner <-> Tools"]
+    Turn -->|"AuditLogger\nUSR_FDE_AUDIT_W: INSERT only"| Log[("audit.AgentAuditLog")]
+    Log -->|"AuditReader\nUSR_FDE_AUDIT_R: SELECT only"| UI
+    Agent["USR_FDE_RO (agent SQL login)"] -. "denied" .-> Log
+```
+
+| Concept | Where |
+| --- | --- |
+| Least privilege, separation of duties | Three logins: the agent acts (read-only on data, denied on `audit`), the writer records (`INSERT` only), the reader views (`SELECT` only) |
+| Fail open, but loudly | `AuditLogger` never raises: a failed write returns a message, the turn yields one `audit_warning`, and the agent carries on |
+| One code path | `run_turn()` is the only place a turn runs and is audited; `graph.py` stays free of I/O |
+| Dependency direction | `ui/` depends on `agent/`; `agent/` does not know the UI exists. `resources/db.py` is shared by the SQL tool and the audit code |
+| Packages as layers | `ui/` (presentation) over `agent/` (orchestration) over `resources/` (tools) over `data/` |
+
 ## Planned, Not Yet Implemented
 
-What's left to reach the design in `research.md` / `technical-design-doc.html`
-(see [`phase-4-plan.md`](phase-4-plan.md)):
-
-- **Audit log (4b)** (`AgentAuditLog`), written by a separate insert-only login.
-- **Streamlit UI (4c)** over the same graph.
+Nothing from the original design in `research.md` / `technical-design-doc.html` is left unbuilt. Known
+limits (see [`phase5-notes.md`](phase5-notes.md)): one user at a time, no login, a failed audit write is lost
+apart from the warning, and the database owner can edit the audit table.
 
 Until that code exists, this section stays a pointer, not a diagram.

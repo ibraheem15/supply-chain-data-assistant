@@ -1,20 +1,16 @@
 # Phase 4: Agent Orchestration
 
-**Status: 4a (orchestrator) is implemented; 4b (audit log) and 4c (UI) are planned.** See
+**Status: complete.** The orchestrator (4a) is implemented; the audit log and UI (originally 4b and 4c)
+moved to Phase 5, see [`phase5-plan.md`](phase5-plan.md). See
 [`phase4-notes.md`](phase4-notes.md) for what was built and what went differently from this plan.
 
 Phase 3 built the data layer, the security layer and the three tools. Phase 4 migrates the
 remaining Phase 3 work, the orchestration, into a LangGraph ReAct agent that decides which tool
 a question needs, calls it through the MCP server from 3c, and answers with citations.
 
-| Step | Scope | Detail in this plan |
-| --- | --- | --- |
-| 4a | Orchestrator: Gemini reasoner + LangGraph graph + MCP tools + CLI chat | Full design below |
-| 4b | Audit log (`AgentAuditLog`, append-only) | Design outline; detailed before it starts |
-| 4c | Streamlit UI | Outline only |
-
-4b and 4c are the other items deferred from Phase 3. They follow once 4a works from the command
-line. A UI over an agent that has not been verified would only hide its failures.
+The audit log and the Streamlit UI, deferred from Phase 3, are planned in [`phase5-plan.md`](phase5-plan.md).
+They follow once the agent works from the command line: a UI over an agent that has not been verified
+would only hide its failures.
 
 # 4a: Orchestrator
 
@@ -133,7 +129,7 @@ extended; see `phase4-notes.md`.*
   broken state: the checkpoint is from the last completed step.
 - **Output size.** Request size is bounded for the free tiers: history is windowed to about 3,000
   tokens (the full history stays in memory), SQL results are capped at 50 rows and 4,000 characters,
-  tool output is compact JSON, descriptions are short, and answers are capped at 2,048 tokens. See
+  tool output is compact JSON, descriptions are short, and answers are capped at 4,096 tokens (raised from 2,048, see `phase5-notes.md`). See
   `phase4-notes.md`.
 
 ## CLI (`cli.py`)
@@ -214,29 +210,10 @@ uv run pytest -m integration                # live Gemini + SQL Server + Pinecon
   Operations Only", which is why 3a defaulted to local embeddings. Acceptable for development
   with sample data. A paid tier or another provider is required before any real client data.
 - **Memory is in-process.** `MemorySaver` is lost on restart and is not shared between processes.
-- **No audit log yet.** Decisions are visible only with `--verbose`. 4b adds the durable log.
+- **No audit log yet.** Decisions are visible only with `--verbose`. Phase 5a adds the durable log.
 - **Prompt injection.** Text from an SOP or a database value could try to instruct the agent.
   The tools bound the damage, since they are read-only and narrow, but the prompt does not
   defend against this. No guardrails, per the Phase 2 decision.
 - **Free quota.** The free tier allows 20 requests per day per model, and a multi-tool question
   costs several of them. The live tests use this quota, so run them rarely.
 - **Long chats.** No message trimming, so a long conversation grows the prompt.
-
-# 4b: Audit log (outline)
-
-The Phase 2 design: every decision cycle is written to `AgentAuditLog`, append-only, with
-`{Timestamp, User_Prompt, Tool_Invoked, Tool_Raw_Output, LLM_Decision}`. Decisions already made:
-
-- **A separate identity.** `USR_FDE_RO` is read-only by design and must stay that way. The log
-  is written by a second login that has `INSERT` on the log table and nothing else, so
-  "append-only" is enforced by SQL Server (no `UPDATE`, no `DELETE`), not by the application.
-- **Written from the graph**, through a callback or a wrapper around the Tools node, so every
-  tool call is recorded without the model being able to skip it.
-- Open: whether raw tool output is stored in full (it can hold telemetry rows) or truncated.
-  Decide with the privacy question above.
-
-# 4c: Streamlit UI (outline)
-
-A thin, stateless presentation layer over the same graph: chat box, message history from the
-checkpointer, and an expandable panel showing the tool calls (the `--verbose` view). It does
-not contain any agent logic. Detailed design after 4a and 4b.

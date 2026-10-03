@@ -9,9 +9,10 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.errors import GraphRecursionError
 
-from agent.cli import ask, friendly_error, message_text
+from agent.cli import ask
 from agent.graph import MAX_HISTORY_TOKENS, RECURSION_LIMIT, build_graph, window_messages
 from agent.prompts import build_system_prompt
+from agent.turn import friendly_error, message_text
 
 
 # Hand-written fake LLM (like a stub/Mockito mock of the chat model). Subclassing LangChain's

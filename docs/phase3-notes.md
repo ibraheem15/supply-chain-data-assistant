@@ -3,8 +3,8 @@
 **Status: Phase 3 is complete.** It covers the SOP ingestion pipeline (3a), the agent's
 read-only database access (3b: least-privilege user and semantic view), and the three agent
 tools exposed through an MCP server (3c). The remaining work originally listed under Phase 3
-(the LangGraph orchestration, the audit log and the Streamlit UI) moved to Phase 4, planned
-in [`phase-4-plan.md`](phase-4-plan.md). See **What's Next** below.
+(the LangGraph orchestration, the audit log and the Streamlit UI) moved to Phase 4 (orchestration,
+[`phase-4-plan.md`](phase-4-plan.md)) and Phase 5 (audit log and UI, [`phase5-plan.md`](phase5-plan.md)). See **What's Next** below.
 
 ## What We Built
 
@@ -228,8 +228,8 @@ Phase 4, planned in [`phase-4-plan.md`](phase-4-plan.md), takes over the remaini
 
 - **4a, orchestrator**: a LangGraph ReAct agent (Gemini reasoner) that decides which tool a
   question needs and calls the 3c tools through the MCP server, with a terminal chat.
-- **4b, audit log**: `AgentAuditLog`, append-only, written by a separate insert-only login.
-- **4c, Streamlit UI** over the same graph.
+- **Phase 5a, audit log**: `audit.AgentAuditLog`, written by a separate insert-only login.
+- **Phase 5b, Streamlit UI** over the same agent.
 
 See [`research.md`](research.md) and [`technical-design-doc.html`](technical-design-doc.html)
 for the underlying design.
