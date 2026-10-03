@@ -118,6 +118,22 @@ a clarifying question when there is no shipment id, to separate today's date fro
 end date (2024-08-29), and to refuse writes. A test asserts that each rule is present, so an
 edit that drops one fails.
 
+The prompt was later rewritten by the project owner as a "Senior Data Scientist" persona with a fixed
+three-part report (Executive Summary, Telemetry & Environment Analysis, Action Plan), then revised after
+live runs exposed three failures. `prompts.py` is the source of truth; the prompt text in
+`phase-4-plan.md` is the original draft.
+
+| Live failure | Rule added |
+| --- | --- |
+| "Find shipments near Los Angeles" returned an averaged position, an averaged temperature and a "current" shipment that does not exist | Data is historical; list the nearest real readings (`TOP 5 ... ORDER BY` distance) with their own timestamps; never average coordinates or temperatures; say "most recent matching reading", never "current" or "active" |
+| The report template's "Current Temp" column and "environment or equipment?" line pushed the model to name an invented cause | Columns renamed (reading time, temp, weather now (live)); a cause is stated only if the data shows it |
+| Readings of -8 to -10 C were called compliant ("temperatures remain within SOP limits") because the SOP text only defines "above 4.0 C = breach" | Fresh perishables must stay between 0.0 and 4.0 C; below 0.0 C is a COLD breach; never call a reading outside the range compliant; the SOP's mitigation steps cover only above 4.0 C, so for a cold breach say there are none and recommend a supervisor review |
+| A simple count would have been padded into a three-part report | The report structure applies to incident and analysis questions; simple factual questions get 1-3 sentences |
+
+Lesson: the SOP document itself was ambiguous (a range, but a breach rule for one side only), and the
+model followed the narrower reading. Business rules the SOP leaves implicit have to be stated in the prompt,
+or better, fixed in the SOP.
+
 ### Loop control and failures
 
 `recursion_limit=12` per question (about five tool rounds) protects the free quota from a
