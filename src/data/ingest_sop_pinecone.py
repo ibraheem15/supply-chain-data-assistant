@@ -14,6 +14,7 @@ import os
 # * Caching
 import hashlib
 import json
+import sys
 
 # * Pinecone configuration
 from pinecone import Pinecone, ServerlessSpec
@@ -50,12 +51,6 @@ class IngestError(Exception):
 def read_sop_file(file_path: Path) -> str:
     """
     Reads an SOP file and returns its content as a string.
-
-    Args:
-        file_path (Path): The path to the SOP file.
-
-    Returns:
-        str: The content of the SOP file as a string.
     """
     if not file_path.exists():
         raise IngestError(f"File not found: {file_path}")
@@ -66,12 +61,6 @@ def read_sop_file(file_path: Path) -> str:
 def split_markdown(text: str) -> list[Document]:
     """
     Splits the given markdown text into sections based on headers.
-
-    Args:
-        text (str): The markdown text to be split.
-
-    Returns:
-        list[Document]: A list of Document objects representing the sections.
     """
     from langchain_text_splitters import (
         MarkdownHeaderTextSplitter,
@@ -81,7 +70,43 @@ def split_markdown(text: str) -> list[Document]:
     return markdown_splitter.split_text(text)
 
 
-def split_sop_file(file_path: Path) -> list[Document]:
+def parse_pdf(file_path: Path) -> list[Document]:
+    """
+    Reads a PDF file and returns its content as a string.
+    """
+    if not file_path.exists():
+        raise IngestError(f"File not found: {file_path}")
+
+    import pymupdf
+
+    with pymupdf.open(str(file_path)) as pdf:
+        documents = []
+        for number, page in enumerate(pdf, start=1):
+            text = page.get_text()
+            if not text.strip():
+                continue
+            documents.append(
+                Document(
+                    page_content=text,
+                    metadata={"source": str(file_path), "page": number},
+                )
+            )
+
+    return documents
+
+
+def parse_md(file_path: Path) -> list[Document]:
+    """
+    Reads a markdown file and returns its content as a list of Document objects.
+    """
+    if not file_path.exists():
+        raise IngestError(f"File not found: {file_path}")
+
+    file_content = read_sop_file(file_path)
+    return split_markdown(file_content)
+
+
+def chunk_sop_file(file_path: Path) -> list[Document]:
     """
     Reads an SOP file and splits its content into chunks using the custom character splitter.
 
@@ -95,8 +120,15 @@ def split_sop_file(file_path: Path) -> list[Document]:
         RecursiveCharacterTextSplitter,
     )
 
-    file_content = read_sop_file(file_path)
-    sections = split_markdown(file_content)
+    suffix = file_path.suffix.lower()
+    if suffix == ".pdf":
+        sections = parse_pdf(file_path)
+    elif suffix == ".md":
+        sections = parse_md(file_path)
+    # elif suffix == ".txt":
+    #     return parse_txt(file_path)
+    else:
+        raise IngestError(f"Unsupported file type: {suffix}")
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
@@ -183,10 +215,9 @@ def upload_chunks(pc: Pinecone, chunks: list[Document], source: str) -> None:
 
 def file_hash(file_path: str) -> str:
     """
-    Computes the SHA-256 hash of the given file.
+    Computes the raw SHA-256 hash of the given file because a pdf is binary so we need to read it as bytes.
     """
-    text = read_sop_file(file_path)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(file_path.read_bytes()).hexdigest()
 
 
 def load_cache() -> dict[str, str]:
@@ -196,7 +227,10 @@ def load_cache() -> dict[str, str]:
 
 
 def save_cache(cache: dict[str, str]) -> None:
-    CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CACHE_FILE.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def find_sop_files() -> list[Path]:
@@ -205,22 +239,60 @@ def find_sop_files() -> list[Path]:
     """
     if not POLICY_DIR.exists():
         raise IngestError(f"Policy directory {POLICY_DIR} does not exist.")
-    return sorted(list(POLICY_DIR.glob("*.md")))
+    
+    return sorted(list(POLICY_DIR.glob("*.md")) + list(POLICY_DIR.glob("*.pdf")))
+
+
+def delete_all_chunks_from_index(pc: Pinecone, file_stem: str) -> None:
+    """
+    Deletes all chunks of a given SOP file from the Pinecone index so we remove stale chunks if the file gets smaller and it only contains 3 ids instead of 4, so that 4th old chunk do not remain in the index.
+    """
+    index_name = create_serverless_index(pc)
+    for ids in pc.Index(index_name).list(prefix=f"{file_stem}::"):
+        pc.Index(index_name).delete(ids)
+    print(f"Deleted all chunks for file stem: {file_stem}")
+
 
 def sync_sop_files() -> None:
     """
     Synchronizes SOP files with the Pinecone index.
     """
-    
+
     pc = connect_pinecone()
     cache = load_cache()
     for file_path in find_sop_files():
         file_key = str(file_path)
         current_hash = file_hash(file_path)
         if cache.get(file_key) != current_hash:
-            chunks = split_sop_file(file_path)
+            delete_all_chunks_from_index(pc, file_stem=file_path.stem)
+            chunks = chunk_sop_file(file_path)
             upload_chunks(pc, chunks, source=file_path.stem)
             cache[file_key] = current_hash
-    save_cache(cache)
-    
-sync_sop_files()
+            # Save after each file, so a crash on a later file doesn't lose this one
+            save_cache(cache)
+            print(f"uploaded {file_path.name}")
+        else:
+            print(f"skipped {file_path.name} (unchanged)")
+
+    current = {str(p) for p in find_sop_files()}
+    # Remove cache entries for files that no longer exist
+    for file_key in list(cache.keys()):
+        if file_key not in current:
+            delete_all_chunks_from_index(pc, file_stem=Path(file_key).stem)
+            # .stem gives path name without the file extension
+            # stem is used in pinecone index keys so thats why using here
+            del cache[file_key]
+            save_cache(cache)
+            print(f"removed {file_key} from cache")
+
+def main() -> None:
+    try:
+        sync_sop_files()
+    except IngestError as e:
+        # Expected, explainable failure: one clean line and a non-zero exit code
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
