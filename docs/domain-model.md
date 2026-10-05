@@ -89,7 +89,6 @@ classDiagram
         ".txt" --> parse_text
         ".pdf" --> parse_pdf
         ".csv" --> parse_csv
-        ".xlsx" --> parse_xlsx
     }
     class ingest_sop_pinecone {
         <<module>>
@@ -110,7 +109,7 @@ classDiagram
 
 ```mermaid
 flowchart LR
-    Files[("data/policy/\n*.md .txt .pdf .csv .xlsx")] --> Parse["parse_file()\nformat dispatch"]
+    Files[("data/policy/\n*.md .txt .pdf .csv")] --> Parse["parse_file()\nformat dispatch"]
     Parse --> Split["split_documents()\nheading-aware for .md,\nsize-based safety net"]
     Cache[(".cache/sop_ingest_cache.json\nhash -> chunk_ids")] --> Plan["plan_sync()\nnew / changed / unchanged / deleted"]
     Split --> Plan

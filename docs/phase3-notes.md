@@ -13,7 +13,7 @@ for Markdown), embeds them, and syncs the result into a Pinecone vector index �
 touching files that are new, changed, or deleted since the last run.
 
 ```
-3a: data/policy/*.{md,txt,pdf,csv,xlsx} -> parse (format dispatch) -> chunk -> embed -> Pinecone (incremental)
+3a: data/policy/*.{md,txt,pdf,csv} -> parse (format dispatch) -> chunk -> embed -> Pinecone (incremental)
 3b: dbo.supply_chain_logistics -> ai.VW_SUPPLY_CHAIN_READINGS (renamed columns) -> USR_FDE_RO (SELECT on the view only)
 ```
 
@@ -57,7 +57,7 @@ tests/                                     # 45 unit tests + 2 integration tests
 ### Polymorphic parsing by file type
 
 `PARSERS` is a dict mapping file suffix to a parser function (`parse_markdown`,
-`parse_text`, `parse_pdf`, `parse_csv`, `parse_xlsx`), each returning
+`parse_text`, `parse_pdf`, `parse_csv`), each returning
 `list[langchain_core.documents.Document]`. Adding a new format later means writing one
 function with that same shape, not touching `plan_sync()` or anything downstream. A
 file that fails to parse is logged and skipped — one bad PDF doesn't kill the run.
@@ -70,7 +70,7 @@ governs — each resulting section carries `Header 1`/`Header 2`/`Header 3` as r
 metadata, not just text baked into the chunk. Every format then passes through
 `RecursiveCharacterTextSplitter` (400 chars, 60 overlap) as a safety net for any
 section that's still too long — `split_documents()` preserves each chunk's metadata
-across that second pass. `.csv`/`.xlsx` skip this second pass entirely: each row is
+across that second pass. `.csv` skips this second pass entirely: each row is
 already one short, complete chunk.
 
 ### Local embeddings by default, Gemini as an explicit opt-in
@@ -178,7 +178,7 @@ is untested; no audit log yet.
 | `dict[str, Callable[[Path], list[Document]]]` | `PARSERS` | polymorphic dispatch by file suffix — the Python way to avoid an if/elif chain per format |
 | Generator function | `_batched()` | yields fixed-size slices without building every batch in memory at once |
 | Dict merge (`|`) | `_base_metadata(path) | {"page": ...}` | combines the shared metadata fields with format-specific ones into one new dict |
-| Late/local imports | `from pypdf import PdfReader` inside `parse_pdf()`, etc. | keeps heavy, format-specific dependencies (pypdf, openpyxl, sentence-transformers) from loading unless that code path actually runs |
+| Late/local imports | `from pypdf import PdfReader` inside `parse_pdf()`, etc. | keeps heavy, format-specific dependencies (pypdf, sentence-transformers) from loading unless that code path actually runs |
 | Dependency injection by parameter | `fetch_weather_conditions(..., client=)` | tests pass a fake `httpx` client instead of calling the network |
 | `monkeypatch` (pytest) | `tests/` | swaps a function (e.g. `_connect`) for a fake for one test |
 | Test markers | `@pytest.mark.integration` | tests needing live services are skipped by default and run with `-m integration` |

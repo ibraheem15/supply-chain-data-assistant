@@ -106,6 +106,40 @@ def parse_md(file_path: Path) -> list[Document]:
     return split_markdown(file_content)
 
 
+def parse_csv(file_path: Path) -> list[Document]:
+    """
+    Reads a CSV file and returns its content as a list of Document objects in key value format inside page content.
+    """
+    if not file_path.exists():
+        raise IngestError(f"File not found: {file_path}")
+
+    import csv
+
+    documents = []
+    with file_path.open(encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        # DictReader returns each row as an ordered dictionary (for tracking columns)
+        for number, row in enumerate(reader, start=1):
+            text = ", ".join(f"{key}: {value}" for key, value in row.items())
+            documents.append(
+                Document(
+                    page_content=text,
+                    metadata={"source": str(file_path), "row": number},
+                )
+            )
+
+    return documents
+
+def parse_txt(file_path: Path) -> list[Document]:
+    """
+    Reads a text file and returns its content as a list of Document objects.
+    """
+    if not file_path.exists():
+        raise IngestError(f"File not found: {file_path}")
+
+    file_content = read_sop_file(file_path)
+    return [Document(page_content=file_content, metadata={"source": str(file_path)})]
+
 def chunk_sop_file(file_path: Path) -> list[Document]:
     """
     Reads an SOP file and splits its content into chunks using the custom character splitter.
@@ -125,11 +159,16 @@ def chunk_sop_file(file_path: Path) -> list[Document]:
         sections = parse_pdf(file_path)
     elif suffix == ".md":
         sections = parse_md(file_path)
-    # elif suffix == ".txt":
-    #     return parse_txt(file_path)
+    elif suffix == ".csv":
+        sections = parse_csv(file_path)
+        return sections
+    elif suffix == ".txt":
+        return parse_txt(file_path)
     else:
         raise IngestError(f"Unsupported file type: {suffix}")
 
+    # Only run the text splitter for non-CSV files
+    # For a Markdown or PDF paragraph, a cut at a sentence boundary loses little, since neighbouring sentences are related and the overlap and the heading metadata restore the context. A CSV row is a record, an atomic unit, and its meaning depends on all of its fields staying together
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
     )
@@ -213,7 +252,7 @@ def upload_chunks(pc: Pinecone, chunks: list[Document], source: str) -> None:
     pc.Index(index_name).upsert(records)
 
 
-def file_hash(file_path: str) -> str:
+def file_hash(file_path: Path) -> str:
     """
     Computes the raw SHA-256 hash of the given file because a pdf is binary so we need to read it as bytes.
     """
@@ -239,8 +278,8 @@ def find_sop_files() -> list[Path]:
     """
     if not POLICY_DIR.exists():
         raise IngestError(f"Policy directory {POLICY_DIR} does not exist.")
-    
-    return sorted(list(POLICY_DIR.glob("*.md")) + list(POLICY_DIR.glob("*.pdf")))
+
+    return sorted(list(POLICY_DIR.glob("*")))
 
 
 def delete_all_chunks_from_index(pc: Pinecone, file_stem: str) -> None:
@@ -285,6 +324,7 @@ def sync_sop_files() -> None:
             save_cache(cache)
             print(f"removed {file_key} from cache")
 
+
 def main() -> None:
     try:
         sync_sop_files()
@@ -296,3 +336,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# data = parse_csv(Path("data/policy/test.csv"))
+# print(data)

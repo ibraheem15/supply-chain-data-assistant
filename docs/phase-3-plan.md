@@ -4,7 +4,7 @@ The orchestration moved to Phase 4 ([`phase-4-plan.md`](phase-4-plan.md)); the a
 
 # SOP Ingestion
 
-data/policy will contain pdf, md, txt, csv, xlsx
+data/policy will contain pdf, md, txt, csv
 These files will go to chunking logic
 
 ## Chunking Logic
@@ -24,10 +24,6 @@ Text files will be split into chunks based on paragraphs. Each chunk will retain
 ### CSV
 
 CSV files will be split into chunks based on rows. Each chunk will retain metadata such as the source file path and row index.
-
-### XLSX
-
-Excel files will be split into chunks based on sheets and rows. Each chunk will retain metadata such as the source file path, sheet name, and row index.
 
 ### Text Splitting
 
