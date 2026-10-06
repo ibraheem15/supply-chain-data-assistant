@@ -177,7 +177,9 @@ def chunk_sop_file(file_path: Path) -> list[Document]:
 
 def embed_chunks(provider: str, chunks: list[Document]) -> list[list[float]]:
     """
-    Embeds the given list of Document chunks into vectors using the local embedding model.
+    Embeds the given list of Document chunks into vectors using the embedding model.
+    
+    "Embed" is the standard term for turning something into a vector. The word comes from math: you embed text into a space with many dimensions.
 
     Args:
         chunks (list[Document]): A list of Document objects to be embedded.
