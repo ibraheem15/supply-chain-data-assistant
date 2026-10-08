@@ -83,25 +83,19 @@ classDiagram
     class IngestError {
         <<Domain Exception>>
     }
-    class PARSERS {
-        <<dispatch table>>
-        ".md" --> parse_markdown
-        ".txt" --> parse_text
-        ".pdf" --> parse_pdf
-        ".csv" --> parse_csv
-    }
     class ingest_sop_pinecone {
         <<module>>
-        +parse_file(path) list~Document~
-        +split_documents(docs) list~Document~
-        +plan_sync(files, cache) dict
-        +build_embeddings(provider, settings) tuple
-        +ensure_pinecone_index(pc, name, dim, cloud, region) None
-        +load_cache(path) dict
-        +save_cache(path, cache) None
-        +main() int
+        +parse_md(path) list~Document~
+        +parse_pdf(path) list~Document~
+        +parse_csv(path) list~Document~
+        +parse_txt(path) list~Document~
+        +chunk_sop_file(path) list~Document~
+        +embed_chunks(provider, chunks) list~vector~
+        +upload_chunks(pc, chunks, source) None
+        +delete_all_chunks_from_index(pc, file_stem) None
+        +sync_sop_files() None
+        +main() None
     }
-    ingest_sop_pinecone ..> PARSERS : dispatches via
     ingest_sop_pinecone ..> IngestError : raises
 ```
 
@@ -109,72 +103,72 @@ classDiagram
 
 ```mermaid
 flowchart LR
-    Files[("data/policy/\n*.md .txt .pdf .csv")] --> Parse["parse_file()\nformat dispatch"]
-    Parse --> Split["split_documents()\nheading-aware for .md,\nsize-based safety net"]
-    Cache[(".cache/sop_ingest_cache.json\nhash -> chunk_ids")] --> Plan["plan_sync()\nnew / changed / unchanged / deleted"]
-    Split --> Plan
-    Plan -->|deletes: old chunk_ids| VectorStore[("Pinecone index")]
-    Plan -->|new+changed chunks| Embed["build_embeddings()\nlocal (default) or gemini"]
-    Embed --> VectorStore
-    VectorDBEnv["envs/vectorDB.env"] --> Provision["ensure_pinecone_index()\nself-heals dimension mismatch"]
-    Provision --> VectorStore
-    LLMEnv["envs/LLM.env"] --> Embed
+    Files[("data/policy/\n*.md .txt .pdf .csv")] --> Chunk["chunk_sop_file()\nif/elif on file suffix,\nheading-aware for .md"]
+    Chunk --> Sync["sync_sop_files()\nnew / changed / unchanged / deleted"]
+    Cache[(".cache/sop_ingest_cache.json\npath -> sha256")] --> Sync
+    Sync -->|"delete old records by prefix"| VectorStore[("Pinecone index")]
+    Sync -->|"new + changed chunks"| Embed["embed_chunks()\nlocal all-MiniLM-L6-v2"]
+    Embed -->|"upsert id = stem::n"| VectorStore
+    VectorDBEnv["envs/vectorDB.env"] --> Connect["connect_pinecone()\ncreate_serverless_index()"]
+    Connect --> VectorStore
 ```
 
 ### DDD Concepts Applied Here
 
 | Concept | Where |
 | --- | --- |
-| Interface as Contract | `PARSERS` — every entry conforms to `Callable[[Path], list[Document]]`; adding a new file format means writing one function, not touching the pipeline |
-| Anti-Corruption Layer | `_base_metadata()` is the one place a raw file path becomes the canonical `source`/`file_type` vocabulary attached to every chunk, regardless of format |
-| Domain exception as a contract | `IngestError`, same role as Phase 1's `IngestionError` |
-| Self-healing infrastructure | `ensure_pinecone_index()` detects a dimension mismatch (e.g. from switching embedding models) and recreates the index instead of failing opaquely |
-| Simplified manifest (deviation from the original design) | `phase-3-plan.md` designed the new/changed/deleted sync as a SQL Server table; the actual implementation uses a local JSON file (`.cache/`) instead — same hash-based logic, no shared/durable state. Acceptable for a single-operator script; would need revisiting if this becomes a scheduled or multi-operator job |
+| Interface as Contract | Every parser returns `list[Document]`, so `chunk_sop_file()` and everything downstream treat all formats the same; a new format means one new function and one new `elif` |
+| Domain exception as a contract | `IngestError`, same role as Phase 1's `IngestionError`: an expected failure is reported cleanly (`main()` prints one line and exits 1) |
+| Idempotent ingestion | Stable record ids (`<stem>::<n>`) and delete-by-prefix before upload mean a changed file fully replaces its old chunks and a rerun changes nothing |
+| Simplified manifest (deviation from the original design) | `phase-3-plan.md` designed the new/changed/deleted sync as a SQL Server table; the implementation uses a local JSON file (`.cache/`) mapping each path to its content hash. Same logic, but per-machine state. Acceptable for a single-operator script; would need revisiting if this becomes a scheduled or multi-operator job |
 
 ## Phase 3b: Agent Security Layer (SQL)
 
 `setup_security_and_view.sql` is a SQL script, not Python, so there are no classes to
-diagram. What it creates inside `SupplyChainDb`:
+diagram. What it creates inside `SupplyChainDb` (the rewrite uses `USR_FDE_RO_2` and the schema
+`ai_2` so it sits next to the original `USR_FDE_RO` and `ai`):
 
 | Object | Role |
 | --- | --- |
 | `dbo.supply_chain_logistics` | Real table with legacy column names; written only by the Phase 1 loader |
-| `ai.VW_SUPPLY_CHAIN_READINGS` | View over that table, columns renamed to the ubiquitous-language names |
-| `USR_FDE_RO` (login + user) | The agent's identity: `SELECT` on the view only, everything else denied |
+| `ai_2.VW_SUPPLY_CHAIN_READINGS` | View over that table, columns renamed to the ubiquitous-language names |
+| `USR_FDE_RO_2` (login + user) | The agent's identity: `SELECT` on the view only, everything else denied |
 
-Dependency direction: `USR_FDE_RO` -> `ai.VW_SUPPLY_CHAIN_READINGS` -> `dbo.supply_chain_logistics`.
+Dependency direction: `USR_FDE_RO_2` -> `ai_2.VW_SUPPLY_CHAIN_READINGS` -> `dbo.supply_chain_logistics`.
 The user has no path to the table except through the view (ownership chaining).
 
 | Concept | Where |
 | --- | --- |
 | Anti-Corruption Layer | The view is the outbound counterpart of `LEGACY_COLUMN_NAMES`: the loader translates names in, the view translates them out. The mapping exists in both places and must be kept in sync |
-| Least privilege | `GRANT SELECT` on one object; `DENY` on `dbo` and `ai` schemas overrides any role or grant |
-| Packages as layers | Schema `ai` is the agent-facing layer, `dbo` the legacy layer |
+| Least privilege | `GRANT SELECT` on one object; `DENY` on the `dbo` and `ai_2` schemas overrides any grant |
+| Login vs user | The login (server level, in `master`) proves who the agent is; the user (database level) holds its permissions |
+| Packages as layers | Schema `ai_2` is the agent-facing layer, `dbo` the legacy layer |
 
 ## Phase 3c: Agent Tools (`src/resources/`)
 
 The application layer. Each tool is a plain function returning
-`{"status": "ok" | "error" | "unavailable", ...}`; `mcp_server.py` is a thin wrapper that
+`{"status": "ok" | "error", ...}`; `mcp_server.py` is a thin wrapper that
 registers them.
 
 ```mermaid
 flowchart LR
-    Agent["agent (Phase 4a)"] -->|MCP stdio| Server["mcp_server.py"]
-    Server --> SQL["query_telemetry_data\nsqlglot validation, 50 row cap, 15s timeout"]
-    Server --> Weather["fetch_weather_conditions\n10s timeout, one retry"]
+    Agent["agent (Phase 4)"] -->|MCP stdio| Server["mcp_server.py"]
+    Server --> SQL["query_telemetry_data\nstring validation, 50 row cap, 15s timeout"]
+    Server --> Weather["fetch_weather_conditions\n10s timeout"]
     Server --> SOP["search_compliance_sop\nsame embedding model as indexing"]
-    Context["schema_context.py\ncolumn docs + legacy glossary"] --> Server
-    SQL -->|"USR_FDE_RO"| View[("ai.VW_SUPPLY_CHAIN_READINGS")]
+    Context["schema_context.py\ncolumn names + legacy glossary"] --> Server
+    Settings["settings.py + db.py\nagent env file, open_connection"] --> SQL
+    SQL -->|"USR_FDE_RO_2"| View[("ai_2.VW_SUPPLY_CHAIN_READINGS")]
     Weather --> OpenMeteo["Open-Meteo REST API"]
-    SOP -->|"build_embeddings()"| Pinecone[("Pinecone index")]
+    SOP -->|"LOCAL_EMBEDDING_MODEL, connect_pinecone()"| Pinecone[("Pinecone index")]
 ```
 
 | Concept | Where |
 | --- | --- |
-| Interface as Contract | The shared `ok`/`error`/`unavailable` result shape: expected failures are data the agent can act on, never exceptions |
-| Defence in depth | `validate_sql()` and the row/time caps sit on top of the Phase 3b database permissions |
-| Dependency direction | Tools depend on stores (SQL Server, Pinecone, HTTP); nothing in `src/data/` depends on tools. `sop_tool` imports `build_embeddings` from `data/` so query and index embeddings cannot diverge |
-| Ubiquitous Language | `schema_context.py` generates the legacy-to-business glossary from `LEGACY_COLUMN_NAMES`, so the SOP's legacy names resolve to the names the agent can query |
+| Interface as Contract | The shared result shape: expected failures are data the agent can act on, never exceptions. `unavailable` (service down) is not yet separated from `error` |
+| Defence in depth | `validate_sql()` and the row cap sit on top of the Phase 3b database permissions |
+| Dependency direction | Tools depend on stores (SQL Server, Pinecone, HTTP); nothing in `src/data/` depends on tools. `sop_tool` imports the embedding model name from `data/` so query and index embeddings cannot diverge |
+| Ubiquitous Language | `schema_context.py` builds the legacy-to-business glossary from `LEGACY_COLUMN_NAMES`, so the SOP's legacy names resolve to the names the agent can query |
 | Packages as layers | `resources/` is the application layer between the agent and the data layer |
 
 ## Phase 4a: Agent Orchestrator (`src/agent/`)
