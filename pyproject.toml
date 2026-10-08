@@ -18,6 +18,7 @@ dependencies = [
     "sqlglot>=30.21.0",
     "python-dotenv>=1.2.4",
     "pyodbc>=5.3.0",
+    "mcp>=2.3.0",
 ]
 
 [dependency-groups]
