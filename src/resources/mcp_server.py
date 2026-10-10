@@ -1,4 +1,4 @@
-from mcp.server.mcpserver import MCPServer
+from fastmcp import FastMCP
 from pydantic_core import to_json
 from resources.schema_context import build_schema_context
 from resources.sop_tool import search_compliance_sop as _search
@@ -7,7 +7,7 @@ from resources.weather_tool import fetch_weather_conditions as _weather
 
 # We used _ as a prefix for imported functions to indicate they are internal.
 
-mcp = MCPServer("supply-chain-tools")
+mcp = FastMCP("supply-chain-tools")
 
 SQL_DESCRIPTION = f"""Run one T-SQL SELECT on historical hourly supply-chain readings.
 For past temperature, location, congestion, demand, delay, risk. At most {MAX_ROWS} rows come back (`truncated` says if more existed): prefer COUNT/AVG/GROUP BY over listing rows. On status "error", fix the SQL and retry.
@@ -37,6 +37,6 @@ def fetch_weather_conditions(latitude: float, longitude: float) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    mcp.run(transport="stdio", show_banner=False)
     # We have use the stdio transport to communicate with the client becuase it allows for easy interaction with subprocesses via standard input and output.
     # With stdio, each client gets its own private server process. If three agents used your tools, there would be three separate processes, each with its own SQL connection and its own copy of the embedding model in memory. With HTTP there is one server that all of them share.
