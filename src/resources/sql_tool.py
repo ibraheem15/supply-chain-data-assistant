@@ -1,5 +1,5 @@
-from src.resources.db import open_connection
-from src.resources.settings import AGENT_SQL_ENV_FILE, load_settings
+from resources.db import open_connection
+from resources.settings import AGENT_SQL_ENV_FILE, load_settings
 
 import pyodbc
 

@@ -38,3 +38,5 @@ def fetch_weather_conditions(latitude: float, longitude: float) -> str:
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
+    # We have use the stdio transport to communicate with the client becuase it allows for easy interaction with subprocesses via standard input and output.
+    # With stdio, each client gets its own private server process. If three agents used your tools, there would be three separate processes, each with its own SQL connection and its own copy of the embedding model in memory. With HTTP there is one server that all of them share.

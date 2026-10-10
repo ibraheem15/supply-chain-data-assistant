@@ -4,6 +4,8 @@ An agentic AI chat interface over a legacy SQL Server supply-chain dataset. See 
 
 ## Phase Status
 
+> **Rewrite in progress (branch `rewrite-by-hand`).** The code is being rewritten by hand, phase by phase, in `src/`. The original AI-written implementation is kept in `src_reference/` for comparison. Rewritten so far: Phases 1 and 3 (3a, 3b, 3c). `src/agent/` and `src/ui/` (Phases 4 and 5) are not rewritten yet, so the table and the structure tree below describe the complete reference implementation. The `tests/` folder and some Makefile targets (`test`, `sop-ingest-dry-run`) also still belong to the reference code.
+
 | Phase | Status | Docs |
 | --- | --- | --- |
 | 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md), [`docs/phase1-notes.md`](docs/phase1-notes.md) |

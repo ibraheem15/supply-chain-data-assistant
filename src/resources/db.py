@@ -2,7 +2,6 @@
 # In system design, this is called single responsibility principle.
 
 import pyodbc
-from resources.settings import load_settings
 
 
 def open_connection(settings: dict[str, str]):

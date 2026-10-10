@@ -174,23 +174,23 @@
       <text x="155" y="58" text-anchor="middle" class="box-label" font-weight="600">IngestError</text>
 
       <rect x="470" y="10" width="250" height="110" rx="6" fill="#FFFFFF" stroke="#E1E6EB"/>
-      <text x="595" y="28" text-anchor="middle" class="box-tag">«dispatch table»</text>
-      <text x="595" y="46" text-anchor="middle" class="box-label" font-weight="600">PARSERS</text>
+      <text x="595" y="28" text-anchor="middle" class="box-tag">«functions»</text>
+      <text x="595" y="46" text-anchor="middle" class="box-label" font-weight="600">parse_*()</text>
       <text x="484" y="64" class="box-label">.md .txt .pdf .csv</text>
-      <text x="484" y="80" class="box-label">-&gt; parse_markdown() etc.</text>
-      <text x="484" y="96" class="box-label">-&gt; parse_pdf(), parse_csv()...</text>
+      <text x="484" y="80" class="box-label">-&gt; parse_md(), parse_txt()</text>
+      <text x="484" y="96" class="box-label">-&gt; parse_pdf(), parse_csv()</text>
 
       <rect x="200" y="160" width="320" height="90" rx="6" fill="#E8EFF7" stroke="#1B4D89"/>
       <text x="360" y="178" text-anchor="middle" class="box-tag">«module»</text>
       <text x="360" y="196" text-anchor="middle" class="box-label" font-weight="600">ingest_sop_pinecone</text>
-      <text x="214" y="216" class="box-label">parse_file(), split_documents()</text>
-      <text x="214" y="232" class="box-label">plan_sync(), build_embeddings(), main()</text>
+      <text x="214" y="216" class="box-label">chunk_sop_file(), embed_chunks()</text>
+      <text x="214" y="232" class="box-label">upload_chunks(), sync_sop_files(), main()</text>
 
       <line x1="300" y1="160" x2="180" y2="80" stroke="#5B6B7A" stroke-dasharray="3 3" marker-end="url(#arrow3)"/>
       <text x="185" y="130" class="edge-label">raises</text>
 
       <line x1="450" y1="170" x2="560" y2="120" stroke="#5B6B7A" stroke-dasharray="3 3" marker-end="url(#arrow3)"/>
-      <text x="490" y="150" class="edge-label">dispatches via</text>
+      <text x="490" y="150" class="edge-label">calls</text>
     </svg>
   </div>
 
@@ -208,23 +208,23 @@
       <text x="100" y="56" text-anchor="middle" class="box-tag">.md .txt .pdf .csv</text>
 
       <rect x="220" y="20" width="160" height="50" rx="6" fill="#E8EFF7" stroke="#1B4D89"/>
-      <text x="300" y="45" text-anchor="middle" class="box-label" font-weight="600">parse_file()</text>
+      <text x="300" y="45" text-anchor="middle" class="box-label" font-weight="600">parse_*()</text>
 
       <rect x="420" y="20" width="170" height="50" rx="6" fill="#E8EFF7" stroke="#1B4D89"/>
-      <text x="505" y="41" text-anchor="middle" class="box-label" font-weight="600">split_documents()</text>
+      <text x="505" y="41" text-anchor="middle" class="box-label" font-weight="600">chunk_sop_file()</text>
       <text x="505" y="56" text-anchor="middle" class="box-tag">heading-aware for .md</text>
 
       <rect x="20" y="120" width="200" height="50" rx="6" fill="#FFFFFF" stroke="#E1E6EB"/>
       <text x="120" y="141" text-anchor="middle" class="box-label">.cache/sop_ingest_cache.json</text>
-      <text x="120" y="156" text-anchor="middle" class="box-tag">hash -&gt; chunk_ids</text>
+      <text x="120" y="156" text-anchor="middle" class="box-tag">path -&gt; sha256</text>
 
       <rect x="300" y="120" width="160" height="50" rx="6" fill="#E8EFF7" stroke="#1B4D89"/>
-      <text x="380" y="141" text-anchor="middle" class="box-label" font-weight="600">plan_sync()</text>
+      <text x="380" y="141" text-anchor="middle" class="box-label" font-weight="600">sync_sop_files()</text>
       <text x="380" y="156" text-anchor="middle" class="box-tag">new/changed/deleted</text>
 
       <rect x="520" y="120" width="170" height="50" rx="6" fill="#E8EFF7" stroke="#1B4D89"/>
-      <text x="605" y="141" text-anchor="middle" class="box-label" font-weight="600">build_embeddings()</text>
-      <text x="605" y="156" text-anchor="middle" class="box-tag">local (default) or gemini</text>
+      <text x="605" y="141" text-anchor="middle" class="box-label" font-weight="600">embed_chunks()</text>
+      <text x="605" y="156" text-anchor="middle" class="box-tag">local all-MiniLM-L6-v2</text>
 
       <rect x="740" y="90" width="140" height="100" rx="6" fill="#FFFFFF" stroke="#E1E6EB"/>
       <text x="810" y="130" text-anchor="middle" class="box-label">Pinecone</text>
@@ -232,11 +232,7 @@
 
       <rect x="300" y="220" width="180" height="50" rx="6" fill="#FFFFFF" stroke="#E1E6EB"/>
       <text x="390" y="241" text-anchor="middle" class="box-label">envs/vectorDB.env</text>
-      <text x="390" y="256" text-anchor="middle" class="box-tag">ensure_pinecone_index()</text>
-
-      <rect x="520" y="220" width="170" height="50" rx="6" fill="#FFFFFF" stroke="#E1E6EB"/>
-      <text x="605" y="241" text-anchor="middle" class="box-label">envs/LLM.env</text>
-      <text x="605" y="256" text-anchor="middle" class="box-tag">GEMINI_API_KEY</text>
+      <text x="390" y="256" text-anchor="middle" class="box-tag">connect_pinecone()</text>
 
       <line x1="180" y1="45" x2="220" y2="45" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
       <line x1="380" y1="45" x2="420" y2="45" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
@@ -244,55 +240,53 @@
       <line x1="220" y1="145" x2="300" y2="145" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
       <line x1="460" y1="145" x2="520" y2="145" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
       <line x1="690" y1="140" x2="740" y2="140" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
-      <line x1="390" y1="220" x2="390" y2="180" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
-      <line x1="605" y1="220" x2="605" y2="170" stroke="#5B6B7A" marker-end="url(#arrow4)"/>
-    </svg>
+      <line x1="390" y1="220" x2="390" y2="180" stroke="#5B6B7A" marker-end="url(#arrow4)"/>    </svg>
   </div>
 
   <h3>DDD Concepts Applied Here</h3>
   <table>
     <tr><th>Concept</th><th>Where</th></tr>
-    <tr><td>Interface as Contract</td><td><code>PARSERS</code> — every entry conforms to <code>Callable[[Path], list[Document]]</code>; adding a new file format means writing one function, not touching the pipeline</td></tr>
-    <tr><td>Anti-Corruption Layer</td><td><code>_base_metadata()</code> is the one place a raw file path becomes the canonical <code>source</code>/<code>file_type</code> vocabulary attached to every chunk, regardless of format</td></tr>
-    <tr><td>Domain exception as a contract</td><td><code>IngestError</code>, same role as Phase 1's <code>IngestionError</code></td></tr>
-    <tr><td>Self-healing infrastructure</td><td><code>ensure_pinecone_index()</code> detects a dimension mismatch (e.g. from switching embedding models) and recreates the index instead of failing opaquely</td></tr>
-    <tr><td>Simplified manifest (deviation from the original design)</td><td><code>phase-3-plan.md</code> designed the sync as a SQL Server table; the actual implementation uses a local JSON file instead — same hash-based logic, no shared/durable state. Fine for a single-operator script; would need revisiting for a scheduled or multi-operator job</td></tr>
+    <tr><td>Interface as Contract</td><td>Every parser returns <code>list[Document]</code>, so <code>chunk_sop_file()</code> and everything downstream treat all formats the same; a new format means one new function and one new <code>elif</code></td></tr>
+    <tr><td>Domain exception as a contract</td><td><code>IngestError</code>, same role as Phase 1's <code>IngestionError</code>: an expected failure is reported cleanly (<code>main()</code> prints one line and exits 1)</td></tr>
+    <tr><td>Idempotent ingestion</td><td>Stable record ids (<code>&lt;stem&gt;::&lt;n&gt;</code>) and delete-by-prefix before upload mean a changed file fully replaces its old chunks and a rerun changes nothing</td></tr>
+    <tr><td>Simplified manifest (deviation from the original design)</td><td><code>phase-3-plan.md</code> designed the new/changed/deleted sync as a SQL Server table; the implementation uses a local JSON file (<code>.cache/</code>) mapping each path to its content hash. Same logic, but per-machine state. Acceptable for a single-operator script; would need revisiting if this becomes a scheduled or multi-operator job</td></tr>
   </table>
 
   <h2>Phase 3b: Agent Security Layer (SQL)</h2>
   <p><code>setup_security_and_view.sql</code> is a SQL script, not Python, so there are no classes to
-  diagram. What it creates inside <code>SupplyChainDb</code>:</p>
+  diagram. What it creates inside <code>SupplyChainDb</code> (the rewrite uses <code>USR_FDE_RO_2</code> and the schema <code>ai_2</code>):</p>
   <table>
     <tr><th>Object</th><th>Role</th></tr>
     <tr><td><code>dbo.supply_chain_logistics</code></td><td>Real table with legacy column names; written only by the Phase 1 loader</td></tr>
-    <tr><td><code>ai.VW_SUPPLY_CHAIN_READINGS</code></td><td>View over that table, columns renamed to the ubiquitous-language names</td></tr>
-    <tr><td><code>USR_FDE_RO</code> (login + user)</td><td>The agent's identity: <code>SELECT</code> on the view only, everything else denied</td></tr>
+    <tr><td><code>ai_2.VW_SUPPLY_CHAIN_READINGS</code></td><td>View over that table, columns renamed to the ubiquitous-language names</td></tr>
+    <tr><td><code>USR_FDE_RO_2</code> (login + user)</td><td>The agent's identity: <code>SELECT</code> on the view only, everything else denied</td></tr>
   </table>
-  <p>Dependency direction: <code>USR_FDE_RO</code> &rarr; <code>ai.VW_SUPPLY_CHAIN_READINGS</code> &rarr;
+  <p>Dependency direction: <code>USR_FDE_RO_2</code> &rarr; <code>ai_2.VW_SUPPLY_CHAIN_READINGS</code> &rarr;
   <code>dbo.supply_chain_logistics</code>. The user has no path to the table except through the view
   (ownership chaining).</p>
   <table>
     <tr><th>Concept</th><th>Where</th></tr>
     <tr><td>Anti-Corruption Layer</td><td>The view is the outbound counterpart of <code>LEGACY_COLUMN_NAMES</code>: the loader translates names in, the view translates them out. The mapping exists in both places and must be kept in sync</td></tr>
-    <tr><td>Least privilege</td><td><code>GRANT SELECT</code> on one object; <code>DENY</code> on the <code>dbo</code> and <code>ai</code> schemas overrides any role or grant</td></tr>
-    <tr><td>Packages as layers</td><td>Schema <code>ai</code> is the agent-facing layer, <code>dbo</code> the legacy layer</td></tr>
+    <tr><td>Least privilege</td><td><code>GRANT SELECT</code> on one object; <code>DENY</code> on the <code>dbo</code> and <code>ai_2</code> schemas overrides any grant</td></tr>
+    <tr><td>Login vs user</td><td>The login (server level, in <code>master</code>) proves who the agent is; the user (database level) holds its permissions</td></tr>
+    <tr><td>Packages as layers</td><td>Schema <code>ai_2</code> is the agent-facing layer, <code>dbo</code> the legacy layer</td></tr>
   </table>
 
   <h2>Phase 3c: Agent Tools (<code>src/resources/</code>)</h2>
   <p>The application layer. Each tool is a plain function returning
-  <code>{"status": "ok" | "error" | "unavailable", ...}</code>; <code>mcp_server.py</code> is a thin
-  wrapper that registers them. Dependencies: <code>agent (Phase 4a)</code> &rarr;
+  <code>{"status": "ok" | "error", ...}</code>; <code>mcp_server.py</code> is a thin
+  wrapper that registers them over stdio. Dependencies: agent (Phase 4) &rarr;
   <code>mcp_server.py</code> &rarr; three tools. <code>query_telemetry_data</code> connects as
-  <code>USR_FDE_RO</code> to <code>ai.VW_SUPPLY_CHAIN_READINGS</code> (sqlglot validation, 50 row cap,
-  15s timeout); <code>fetch_weather_conditions</code> calls the Open-Meteo REST API (10s timeout, one
-  retry); <code>search_compliance_sop</code> queries Pinecone via <code>build_embeddings()</code>, the same
-  embedding model used at indexing time. <code>schema_context.py</code> supplies column docs and a legacy
-  glossary to the server.</p>
+  <code>USR_FDE_RO_2</code> to <code>ai_2.VW_SUPPLY_CHAIN_READINGS</code> through <code>db.py</code>
+  (string validation, 50 row cap, 15s timeout); <code>fetch_weather_conditions</code> calls the Open-Meteo
+  REST API (10s timeout); <code>search_compliance_sop</code> embeds the question with the same local model
+  used at indexing time and queries Pinecone. <code>settings.py</code> loads the env files and
+  <code>schema_context.py</code> supplies column docs and a legacy glossary to the server.</p>
   <table>
     <tr><th>Concept</th><th>Where</th></tr>
-    <tr><td>Interface as Contract</td><td>The shared <code>ok</code>/<code>error</code>/<code>unavailable</code> result shape: expected failures are data the agent can act on, never exceptions</td></tr>
-    <tr><td>Defence in depth</td><td><code>validate_sql()</code> and the row/time caps sit on top of the Phase 3b database permissions</td></tr>
-    <tr><td>Dependency direction</td><td>Tools depend on stores (SQL Server, Pinecone, HTTP); nothing in <code>src/data/</code> depends on tools. <code>sop_tool</code> imports <code>build_embeddings</code> from <code>data/</code> so query and index embeddings cannot diverge</td></tr>
+    <tr><td>Interface as Contract</td><td>The shared result shape: expected failures are data the agent can act on, never exceptions. <code>unavailable</code> (service down) is not yet separated from <code>error</code></td></tr>
+    <tr><td>Defence in depth</td><td><code>validate_sql()</code> and the row cap sit on top of the Phase 3b database permissions</td></tr>
+    <tr><td>Dependency direction</td><td>Tools depend on stores (SQL Server, Pinecone, HTTP); nothing in <code>src/data/</code> depends on tools. <code>sop_tool</code> imports the embedding model name from <code>data/</code> so query and index embeddings cannot diverge</td></tr>
     <tr><td>Ubiquitous Language</td><td><code>schema_context.py</code> generates the legacy-to-business glossary from <code>LEGACY_COLUMN_NAMES</code>, so the SOP's legacy names resolve to the names the agent can query</td></tr>
     <tr><td>Packages as layers</td><td><code>resources/</code> is the application layer between the agent and the data layer</td></tr>
   </table>
