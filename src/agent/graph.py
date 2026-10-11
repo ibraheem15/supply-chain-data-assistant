@@ -34,7 +34,12 @@ def build_graph(llm, tools):
     builder.add_node("tools", tool_node)
     builder.add_edge(START, "reasoner")
     builder.add_conditional_edges("reasoner", tools_condition)
-    builder.add_edge("tools", "reasoner")
+    # tools_condition is not the tools node. It's a router function that runs after the
+    # reasoner and checks the LLM's reply: if it asks for a tool it returns "tools",
+    # otherwise END. It never calls a tool itself; the "tools" node (ToolNode) does that.
+
+    builder.add_edge("tools", "reasoner") # always runs: after tools, go to reasoner
+    
     # We didn't add end node because tools_condition is the end-or-continue switch. END is a built-in marker meaning "the graph is finished", and it's what tools_condition returns
 
     return builder.compile(checkpointer=MemorySaver())
