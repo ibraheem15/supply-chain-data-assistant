@@ -2,7 +2,7 @@
 
 **Status: Phase 5 is complete in the rewrite, apart from tests.** The audit log (5a) was written by hand: the SQL
 script, the writer, the reader and the shared turn loop. The Streamlit UI (5b) was **adapted from the reference
-implementation** (`src_reference/ui/`), not written by hand, and ported to the rewrite's function names. See
+implementation** (in git history: commit `dd9ee4a`, `src_reference/ui/`), not written by hand, and ported to the rewrite's function names. See
 [`phase5-plan.md`](phase5-plan.md) for the original design. The reference version of these notes (with its tests and
 its live-run findings) is in git history.
 

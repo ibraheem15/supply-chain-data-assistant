@@ -1,7 +1,7 @@
 # Phase 3 Notes: SOP Ingestion, Agent Security Layer and Agent Tools
 
-**Status: Phase 3 is rewritten by hand and complete.** The original AI-written implementation is kept in
-`src_reference/`; everything in `src/` was written file by file on the `rewrite-by-hand` branch. Phase 3 covers
+**Status: Phase 3 is rewritten by hand and complete.** The original AI-written implementation is in git history
+(commit `dd9ee4a` moved it to `src_reference/`, later removed); everything in `src/` was written file by file on the `rewrite-by-hand` branch. Phase 3 covers
 the SOP ingestion pipeline (3a), the agent's read-only database access (3b: least-privilege user and semantic
 view) and three agent tools exposed through an MCP server (3c). The LangGraph orchestration, audit log and
 Streamlit UI belong to Phases 4 and 5, which are not rewritten yet. See **What's Next** below.

@@ -1,8 +1,7 @@
 # Phase 4 Notes: Agent Orchestration (hand-written rewrite)
 
 **Status: Phase 4 is complete in the rewrite.** The orchestrator was written by hand in `src/agent/`. The
-original AI-written version is in `src_reference/agent/` (it also holds the audit log and the UI, which belong to
-Phase 5 and are not rewritten yet). See [`phase-4-plan.md`](phase-4-plan.md) for the original design. This file
+original AI-written version is in git history (commit `dd9ee4a` moved it to `src_reference/agent/`, later removed). See [`phase-4-plan.md`](phase-4-plan.md) for the original design. This file
 describes the rewrite, and says where it differs from that plan.
 
 ## What We Built
