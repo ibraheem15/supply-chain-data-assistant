@@ -147,7 +147,7 @@ make sqlserver-down   # when done for the day; the named volume keeps the data
 ## What's Next
 
 Phase 2 — Solution Exploration. The business case and initial technical design (HLD/LLD)
-are drafted in [`technical-design-doc.html`](technical-design-doc.html) and
+are drafted in [`technical-design-doc.pdf`](technical-design-doc.pdf) and
 [`business-pitch.html`](business-pitch.html), with supporting notes in
 [`research.md`](research.md) — none of that is implemented yet. See
 [`domain-model.md`](domain-model.md) for the current class and dependency diagrams,

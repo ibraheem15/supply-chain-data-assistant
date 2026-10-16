@@ -4,14 +4,14 @@
 import pyodbc
 
 
-def open_connection(settings: dict[str, str]):
+def open_connection(settings, user_key="MSSQL_AGENT_USER", password_key="MSSQL_AGENT_PASSWORD"):
     connection_string = (
         f"DRIVER={{{settings['MSSQL_DRIVER']}}};"
         f"SERVER={settings['MSSQL_SERVER']};"
         f"DATABASE={settings['MSSQL_DATABASE']};"
-        f"UID={settings['MSSQL_AGENT_USER']};"
+        f"UID={settings[user_key]};"
         f"TrustServerCertificate=yes;"
-        f"PWD={settings['MSSQL_AGENT_PASSWORD']}"
+        f"PWD={settings[password_key]}"
     )
     connection = pyodbc.connect(connection_string, timeout=10)
     connection.timeout = 15

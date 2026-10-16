@@ -1,16 +1,19 @@
-# Phase 5 Notes: Audit Log and Streamlit UI
+# Phase 5 Notes: Audit Log and Streamlit UI (rewrite)
 
-**Status: Phase 5 is complete.** 5a (the audit log) and 5b (the Streamlit UI) are built. See
-[`phase5-plan.md`](phase5-plan.md) for the design and the decisions behind it.
+**Status: Phase 5 is complete in the rewrite, apart from tests.** The audit log (5a) was written by hand: the SQL
+script, the writer, the reader and the shared turn loop. The Streamlit UI (5b) was **adapted from the reference
+implementation** (`src_reference/ui/`), not written by hand, and ported to the rewrite's function names. See
+[`phase5-plan.md`](phase5-plan.md) for the original design. The reference version of these notes (with its tests and
+its live-run findings) is in git history.
 
 ## What We Built
 
-An append-only audit trail of everything the agent does, written by a login that can only `INSERT`, and a
-single-chat Streamlit UI that shows each tool call live and lets you search the trail.
+An append-only audit trail of everything the agent does, enforced by SQL Server permissions, and a Streamlit chat
+that shows each tool call live and has a viewer for the audit log.
 
 ```
-question -> run_turn() -> graph (Reasoner <-> Tools) -> events -> UI cards / CLI lines
-                      \\-> audit.AgentAuditLog (insert-only login) <- audit viewer (read-only login)
+question -> run_turn() -> graph.astream() -> one event per step -> audit row (INSERT-only login) + event to CLI/UI
+                                                                        audit tab <- SELECT-only login <- audit_2.AgentAuditLog
 ```
 
 ## File Structure
@@ -18,190 +21,191 @@ question -> run_turn() -> graph (Reasoner <-> Tools) -> events -> UI cards / CLI
 ```
 src/
 ├── data/
-│   └── setup_audit_log.sql        # schema [audit], table, three-login permissions, self-check
+│   └── setup_audit_log.sql    # audit_2 schema, AgentAuditLog table, two logins, grants and denies
 ├── resources/
-│   └── db.py                      # one shared SQL Server connection helper (was inside sql_tool)
+│   ├── db.py                  # open_connection(settings, user_key, password_key): defaults to the agent's login
+│   └── settings.py            # + AUDIT_SQL_ENV_FILE
 ├── agent/
-│   ├── audit.py                   # AuditEvent, AuditLogger (writer), AuditReader, redaction
-│   ├── turn.py                    # run_turn(): one turn as a stream of TurnEvents, audited
-│   ├── warm.py                    # python -m agent.warm: download the embedding model once
-│   ├── cli.py                     # now a thin front end over run_turn()
-│   └── tools.py                   # starts the MCP server offline when the model is cached
-└── ui/
-    ├── runtime.py                 # AgentRuntime: background thread, event loop, MCP session, turn lock
-    └── app.py                     # the Streamlit page: chat, tool cards, sidebar, audit tab
-envs/audit_sqlserver.env           # writer and reader passwords (gitignored; .example.env committed)
-.streamlit/config.toml             # light and dark themes, toolbar, file watcher
-tests/test_audit.py, tests/test_ui.py
+│   ├── audit.py               # record() writer, redact(), ping(), AuditReader (sessions, search)
+│   ├── turn.py                # TurnEvent, run_turn(): the shared turn loop
+│   └── cli.py                 # prints the events of run_turn()
+└── ui/                        # adapted from the reference implementation
+    ├── runtime.py             # background thread: event loop, MCP session, graph, one-turn lock
+    └── app.py                 # chat, live tool cards, sidebar status, audit viewer
+.streamlit/config.toml         # light and dark themes, file watcher off, toolbar "viewer"
 ```
+
+The rewrite uses new names so it can sit next to the reference objects in the same database: schema `audit_2`,
+logins and users `USR_FDE_AUDIT_W_2` and `USR_FDE_AUDIT_R_2`.
 
 ## Topic Sections
 
 ### Three identities, one table
 
-| Login | Can | Cannot |
-| --- | --- | --- |
-| `USR_FDE_RO` (agent, from 3b) | read the data view | anything on schema `audit` (explicit `DENY`) |
-| `USR_FDE_AUDIT_W` (writer) | `INSERT` into `audit.AgentAuditLog` | `SELECT`, `UPDATE`, `DELETE`, anything else |
-| `USR_FDE_AUDIT_R` (reader, UI) | `SELECT` from the table | writes |
+| Login | Can | Cannot | Used by |
+| --- | --- | --- | --- |
+| `USR_FDE_RO_2` (3b) | `SELECT` on `ai_2.VW_SUPPLY_CHAIN_READINGS` | anything on `audit_2` (explicit `DENY`) | the SQL tool |
+| `USR_FDE_AUDIT_W_2` | `INSERT` on `audit_2.AgentAuditLog` | `SELECT`, `UPDATE`, `DELETE`, `ALTER` | `audit.record()` |
+| `USR_FDE_AUDIT_R_2` | `SELECT` on `audit_2.AgentAuditLog` | writes of any kind | `AuditReader` (the audit tab) |
 
-The table lives in its own schema `audit`, not `ai`: `ai` is the agent-facing layer where the agent's
-login is denied `INSERT`, and giving that login write access would end the read-only guarantee. The
-script `setup_audit_log.sql` ends by impersonating each login and asserting ten allowed and refused
-actions; `make audit-db-setup` prints ten `PASS` lines. The database owner can still edit the table
-(accepted).
+The agent cannot read or edit its own trail, the writer can only append, and the reader cannot write. The log is in
+its own schema, not in `ai_2`: that schema is the agent-facing read layer, and a write grant there would end the
+read-only guarantee. The one party who can still edit history is the database owner (`sa`/`dbo`), which is accepted
+for a development system. A client deployment would add hash chaining or write-once storage.
+
+`setup_audit_log.sql` follows the 3b pattern: logins created in `master` with `IF NOT EXISTS ... CREATE LOGIN ...
+ELSE ALTER LOGIN` (so re-running also rotates the passwords), the schema owned by `dbo` created through `EXEC`,
+users created for the logins, and one `GRANT` plus explicit `DENY`s for each user. `DENY` is written even where
+nothing was granted, because a `DENY` holds even if someone later adds a role or a grant. Passwords come in as
+`sqlcmd` variables (`$(WriterPassword)`, `$(ReaderPassword)`) from `envs/audit_sqlserver.env`. Run it with
+`make audit-db-setup`. The reference script also had a self-check that impersonates each login and prints PASS or
+FAIL; the rewrite has none, and the boundary was checked by hand with `EXECUTE AS USER`.
 
 ### One row per event
 
-`AuditEvent` has one field per column: session, turn, step, node, event type, tool name, tool-call id,
-status, input, output, error, provider, model, duration and token counts. A turn is replayed by ordering
-on `LogId`; a `tool_call` and its `tool_result` share a `ToolCallId`. Prompts, SQL and tool output are
-stored in full (accepted: local database, sample data). Secrets are redacted before storing: every API
-key or password found in the env files is replaced with `***`.
+`audit_2.AgentAuditLog` has one row per event, so a turn can be replayed in order: `SessionId` (the chat's
+`thread_id`), `TurnId` (one question), `StepNo`, `Node`, `EventType` (`user_prompt`, `tool_call`, `tool_result`,
+`final_answer`, `error`), the tool name and call id, `Status`, the input and output in full, the error text,
+provider and model, `DurationMs` (time since the previous event) and the token counts.
+
+- **`IDENTITY(1,1)`:** the database numbers the rows, so the app cannot reuse or fake a `LogId`.
+- **`DEFAULT SYSUTCDATETIME()`:** the database stamps the time, so the app cannot backdate an entry.
+
+### The writer (`audit.py`)
+
+- `_insert(event)` builds `INSERT INTO audit_2.AgentAuditLog (cols) VALUES (?, ?, ...)` from a whitelist of
+  column names (names go into the SQL text, so only names from `COLUMNS` are used). Values travel as `?`
+  parameters, so a prompt that contains SQL is stored as text and never runs. `connection.commit()` is required:
+  `pyodbc` does not auto-commit, and without it the row is rolled back.
+- `record(event)` runs `_insert` with `asyncio.to_thread` (the call blocks, and the chat's event loop must not
+  freeze) and returns `True` or `False`. It **never raises**: a broken log must not take the agent down. The
+  `except Exception` is deliberately broad, and the `False` is what makes the failure visible.
+- `redact(text)` replaces every secret value found in the env files (any setting whose name contains `PASSWORD`,
+  `KEY`, `TOKEN` or `SECRET`, 8 characters or longer) with `***`. It works on values, not patterns, so an unusual
+  key format is still caught. It is applied to every text field. A secret that is not in those env files would not
+  be caught.
+- `open_connection(settings, user_key, password_key)` takes the setting names, so the same helper opens the
+  agent's, the writer's or the reader's connection. The audit code merges the agent env file (server, driver,
+  database) with the audit env file (the two logins) through `load_settings(*env_files)`.
 
 ### Notify and carry on
 
-`AuditLogger` never raises. A failed write returns a message, the turn loop yields one `audit_warning`
-event for that turn, and the agent keeps working; the CLI prints `[warning] ...` and the UI shows a
-warning banner. The cost is a gap in the trail, so the warning is not optional.
+If a write fails, the agent keeps working and the front end shows one warning per turn ("this turn is not being
+recorded"). The cost is a gap in the trail, which is why the warning is not optional.
 
-### One shared turn loop
+### One shared turn loop (`turn.py`)
 
-`run_turn()` in `turn.py` runs one question through the graph and yields `TurnEvent`s (tool call, tool
-result, answer, error, audit warning). It also writes the audit rows. The CLI and the UI both consume
-it, so neither can skip the audit and `graph.py` stays free of I/O. `ask()` in the CLI is now a thin
-wrapper that prints verbose lines. Errors inside a turn become an `error` event and an audit row, never
-an exception.
+`run_turn(graph, question, session_id, provider, model)` is an **async generator**: an `async def` with `yield`,
+read with `async for`, so the caller receives each event while the agent is still working. It calls
+`graph.astream(..., stream_mode="updates")`, which yields one dictionary per finished node, and turns each message
+into an audit row and a `TurnEvent`:
+
+| Message | Audit row | Event |
+| --- | --- | --- |
+| user question | `user_prompt` | none |
+| `AIMessage` with tool calls | one `tool_call` per call (arguments as JSON, token usage once) | `tool_call` |
+| `ToolMessage` | `tool_result` with the `status` read from the tool's JSON | `tool_result` |
+| `AIMessage` without tool calls | `final_answer` | `answer` |
+| an exception | `error` | `error` |
+
+An inner function cannot `yield` for its caller, so `log()` appends events to a `pending` list and the main loop
+yields them. `run_turn` never raises: any exception (quota, network, the graph's step limit) becomes an `error`
+row and event. Both the CLI and the UI consume it, so neither can skip the audit, and `graph.py` stays free of I/O.
 
 ### Streamlit and an async agent
 
-Streamlit re-runs the whole page script on every click, but the agent is async and keeps one persistent
-MCP session. `AgentRuntime` therefore owns **one background thread with its own event loop**, started
-once through `st.cache_resource`. The page submits a turn with `asyncio.run_coroutine_threadsafe` and
-reads events from a `queue.Queue`. A `threading.Lock` allows one turn at a time: a second browser tab
-gets a "busy" message. After a turn the page calls `st.rerun()`, so the finished turn is drawn from
-history exactly like older turns.
+Streamlit re-runs the whole page script on every click, but the agent is async and keeps one persistent MCP
+session. `AgentRuntime` (`ui/runtime.py`) therefore owns **one background thread with its own event loop**, started
+once through `st.cache_resource`. It opens the adapter, builds the graph, sends one throwaway SOP query so the
+embedding model is loaded before the first question, and waits. The page submits a turn with
+`asyncio.run_coroutine_threadsafe` and reads events from a `queue.Queue`. A `threading.Lock` allows one turn at a
+time: a second browser tab gets a "busy" message.
 
 ### The UI
 
-A chat with a status box that shows each tool call as it happens (SQL shown as SQL), tool cards
-(expanders with arguments, a result preview, status and timing) in the history, and error and
-audit-warning banners. The sidebar has "New chat" (a new `thread_id`; the old chat is gone from the
-UI and kept only in the audit log), and status dots for the agent, tools, the SOP model and the audit
-log. The **Audit log** tab filters by chat, tool, event, status, dates and free text, and opens any
-entry in full. It reads past chats too, because the log persists.
+A chat with a status box that shows each tool call as it happens (SQL shown as SQL), tool cards (expanders with
+arguments, a result preview, status and timing) in the history, and error and audit-warning banners. The sidebar
+has "New chat" (a new `thread_id`; the old chat is kept only in the audit log) and status dots for the agent, the
+tools, the SOP model and the audit log. The **Audit log** tab filters by chat, tool, event, status, dates and free
+text, and opens any entry in full. It reads past chats too, because the log persists. `.streamlit/config.toml`
+defines a light and a dark theme; the viewer switches in the top-right menu.
 
-### Light and dark themes
+### Porting the reference UI: what had to change
 
-`.streamlit/config.toml` defines two complete palettes, `[theme.light]` and `[theme.dark]`, and Streamlit
-follows the operating system's setting by default. The viewer can switch at any time from the menu at the top
-right (Settings, Theme: light, dark or system); the sidebar says so. The page uses only Streamlit's own colours
-(`:green[●]` status dots, expanders, code blocks, tables), so both themes apply everywhere with no custom CSS.
+| Mismatch | Fix |
+| --- | --- |
+| `TurnEvent` had no tool-call id, argument dict or duration | Added `tool_call_id`, `data` and `duration_ms`; `run_turn` fills them |
+| The UI used an `AuditLogger` object and `AuditReader` class | `audit.py` gained `AuditReader` (`sessions()`, `search()`) and `ping()`; the writer stays a function |
+| `runtime.audit` no longer exists (`AttributeError` in the sidebar) | The sidebar uses `runtime.audit_error`, which the start-up `ping` fills in |
+| Reference names: `mcp_tools`, `build_graph(llm, tools, MemorySaver())`, `describe_llm(llm)` | `open_adapter()`, `build_graph(llm, tools)`, `describe_llm()` |
+| The reference SOP tool took a `top_k` argument | The warm-up sends only `{"query": ...}` |
 
-The first config hid the whole menu (`toolbarMode = "minimal"`), and the theme switch lives in that menu, so
-dark mode would not have been reachable. It is now `"viewer"`: the menu stays, developer options (rerun, clear
-cache, deploy) stay hidden.
+### Problems found while building
 
-| Role | Light | Dark |
-| --- | --- | --- |
-| Background | `#FFFFFF` | `#0E1117` |
-| Secondary background (sidebar, cards) | `#F2F5F9` | `#1A1F2B` |
-| Text | `#1F2933` | `#E6EAF0` |
-| Accent and links | `#1B4D89` | `#7AB3F0` / `#8FC1FF` |
-| Code background | `#EEF2F7` | `#151A24` |
+- **A renaming slip in a security script.** After switching to `_2` names, `setup_audit_log.sql` still denied the old
+  `USR_FDE_RO` on the audit schema (that user exists in the database from the reference implementation, so the
+  `IF EXISTS` was true) and the old `ai` schema. The rewrite's agent, `USR_FDE_RO_2`, had no explicit `DENY`. Fixed
+  to the `_2` names. When a script names security principals, the self-check is what would have caught it.
+- **`print` inside a tool never shows** (Phase 4): relevant here too, because audit failures must be reported
+  through events and warnings, not prints.
 
-Tests compute the WCAG contrast ratio of every text and background pair in both themes and require at least
-4.5:1 for text and links and 3:1 for the accent. **Not verified visually:** a headless Firefox screenshot came
-back blank (it captures the page before Streamlit's JavaScript renders), so the themes have been checked by
-numbers and by Streamlit accepting the config, not by eye. Look at both once in a browser.
+## Accepted limits
 
-### Start-up: warm-up and the offline embedding model
-
-The SOP embedding model loads inside the MCP server. In a live CLI run the first SOP search waited about
-37 seconds and contacted `huggingface.co` on every start. Fixes: `make warm-models` downloads the model
-once; `tools.server_env()` then starts the MCP server with `HF_HUB_OFFLINE=1` whenever the model is in the
-Hugging Face cache; and the UI sends one throwaway SOP query at start-up, so the model is loaded before the
-first question. In the live check the first real SOP call took 0.4 seconds.
-
-### Refactor: one connection helper
-
-`resources/db.py` now holds the ODBC driver choice, connection string and the pooling switch. The SQL
-tool and the audit code both use it, so the credential-quoting logic exists once.
-
-### Problems found in the first real browser run
-
-The first run in a real browser (the offline tests and my headless runs had passed) exposed four problems.
-The audit log itself found the worst one.
-
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| After all tools ran, the answer was "(The model returned no answer.)" | The Phase 4 output cap (`MAX_OUTPUT_TOKENS=2048`) was too small for a reasoning model (`gpt-oss-20b`): its hidden reasoning counts toward the cap, so the whole budget went on thinking. The audit row showed `CompletionTokens = 2048`, exactly the cap, with 31 characters of output | Cap raised to 4096; `reasoning_effort="low"` for the `gpt-oss` models (Groq rejects the parameter for other models); and an empty answer that stopped at `finish_reason=length` now reports "reached its output limit" with the token count, as an error event and an `error` audit row, not a bland "no answer" |
-| Hundreds of `ModuleNotFoundError: torchvision` tracebacks, and a slow start | `agent.tools` imported the ingestion module to read a model name; that loaded `transformers` into the Streamlit process, and Streamlit's file watcher then imported every lazy `transformers` submodule | The cache-folder name is spelled out in `tools.py` (a test checks it matches the ingestion constant); a regression test runs a subprocess and asserts `transformers` is not imported; and `.streamlit/config.toml` sets `fileWatcherType = "none"` (the cost: restart `make ui` after code changes) |
-| "`use_container_width` will be removed" warning on every re-run | Deprecated Streamlit parameter on the New chat button and the audit table | Replaced with `width="stretch"`; a test fails if it comes back |
-| "Final answer not saved in the audit log" | The rows are saved, in full (checked directly in SQL Server and through the reader the UI uses). The one that looked wrong was the earlier empty-answer turn, which stored its 31-character placeholder. The audit table also showed no output column, so an answer was only visible after opening an entry | The empty-answer case is fixed (above) and the table now has a one-line `Preview` column showing the answer, tool result, prompt or error |
-
-Lesson: a headless test proves the wiring, not the experience. A real browser, a real model and a
-reasoning model each found a problem that a fake could not. The audit log earned its place by pointing at
-the cause (`CompletionTokens` equal to the cap) within one query.
+| Limit | Why it is accepted for now |
+| --- | --- |
+| One user, no login, one chat | Removes a durable checkpointer, per-user MCP processes and concurrency design. The audit log keeps the history |
+| Private data stored in full | The database is local and the data is the project's own sample data. Redaction only removes secrets |
+| A failed audit write is lost | The agent carries on and shows a warning; there is no retry queue |
+| Tamper-resistance stops at the database owner | Enough for a development system |
+| No tests for `audit.py`, `turn.py` or `ui/` | `turn.py` and `audit.py` are built to be tested with a fake graph and a fake writer; the tests are not written yet |
+| The UI was not written by hand | Adapted from the reference implementation on purpose; read it before changing it |
+| No self-check in `setup_audit_log.sql` | Checked manually with `EXECUTE AS USER` instead |
+| Tools return only `ok` or `error` | `unavailable` is mentioned in the prompt, but the weather and SOP tools do not return it yet |
 
 ## Python Concepts: Quick Reference
 
-| Concept | Where used | What it's for |
+| Concept | Where used | Note |
 | --- | --- | --- |
-| `dataclasses.fields()` | `audit.py` | builds the SQL column list from the dataclass fields, so event and table cannot drift |
-| async generator (`async def` + `yield`) | `turn.py` `run_turn` | streams events to the caller as the graph produces them |
-| `nonlocal` | `turn.py` | lets a nested function change a counter in the enclosing function |
-| `asyncio.to_thread` | `audit.py` | runs the blocking database insert without freezing the event loop |
-| `threading.Thread`, `Lock`, `queue.Queue` | `ui/runtime.py` | a background thread, a one-turn-at-a-time lock, and a thread-safe hand-off of events |
-| `asyncio.run_coroutine_threadsafe` | `ui/runtime.py` | schedules a coroutine on another thread's event loop |
-| walrus `:=` | `ui/app.py` | assigns and tests in one expression: `while (event := events.get()) is not None` |
-| `@st.cache_resource` | `ui/app.py` | one shared object per server process, surviving Streamlit's script re-runs |
-| `AppTest` (Streamlit) | `tests/test_ui.py` | runs the page headlessly and inspects widgets |
+| Async generator (`async def` + `yield`, `async for`) | `turn.py` | Deliver events while the work is still running |
+| `asyncio.to_thread` | `audit.record` | Run blocking code (`pyodbc`) without freezing the event loop |
+| `nonlocal` | `log()` in `turn.py` | Lets an inner function change the outer function's variables |
+| `@dataclass` | `TurnEvent` | A plain record type with defaults |
+| `?` placeholders (parameterised SQL) | `audit.py` | Values travel separately from the SQL text |
+| Default parameter values | `open_connection` | The agent's keys stay the default; the audit code passes its own |
+| Threads and `queue.Queue` | `ui/runtime.py` | The page thread reads events produced in the runtime thread |
+| `st.cache_resource` | `ui/app.py` | One shared object per server process, across page re-runs |
 
 ## FDE / DDD Concepts
 
-- **Least privilege, by separation of duties**: the identity that acts, the one that records and the one
-  that reads are three different logins. No single credential can both do something and erase the trace.
-- **Fail open, but loudly**: a broken audit log must not take the assistant down, so the agent carries on
-  and the failure is shown. The alternative (fail closed) is the right choice when the log is a legal
-  requirement.
-- **One code path**: a single turn loop feeds both front ends, so a guarantee (every step is audited) holds
-  for all of them.
-- **Dependency direction**: `ui/` depends on `agent/`; `agent/` does not know the UI exists.
-- **Observability**: the audit table is the durable form of the `--verbose` view, with timings and token
-  counts for cost tracking.
-
-## Verification
-
-| Check | Result |
+| Concept | Where |
 | --- | --- |
-| Offline tests | 110 pass (writer, reader, redaction, failure handling, the turn loop, the UI through `AppTest`, the runtime lock) |
-| `make audit-db-setup` self-check | 10 `PASS` lines |
-| Live permission test | Writer cannot `SELECT`, `UPDATE` or `DELETE`; reader cannot `DELETE`; the agent login cannot read the log |
-| Real turn through the real runtime and page (Groq `gpt-oss-120b`) | Agent ready, 3 tools, SOP model warm, audit on; the SOP question produced a tool card (0.4 s) and the cold-breach answer; 4 audit rows with provider, model, durations and token counts |
-| The question that failed in the browser, re-run on the user's model (`gpt-oss-20b`) | Three tool cards (database, weather, SOP), no errors or warnings, a full answer, and the answer stored in the audit log (1,273 characters, ending with the SOP citation) |
-| Themes | Both load without Streamlit config warnings; text, link and accent contrast meet the thresholds in both |
-| `make ui` | Streamlit starts, health and page return HTTP 200, listening on localhost only |
-
-The live checks use LLM quota, so they are marked `integration` and skipped by default.
+| Least privilege, separation of duties | Three logins: act, record, view |
+| Audit trail as a security control | The agent cannot read or edit its own trail |
+| Fail open, but loudly | `record()` returns `False`, the turn yields one `audit_warning` |
+| Untrusted text in the log | Parameterised inserts and a column whitelist; secrets redacted by value |
+| One code path | `run_turn()` is the only place a turn runs and is audited |
+| Dependency direction | `ui/` depends on `agent/`, never the reverse; `resources/db.py` is shared |
+| Orchestration vs delivery | The graph produces events; the CLI and the UI each decide how to show them |
 
 ## Run
 
 ```bash
-make agent-db-setup && make audit-db-setup   # database logins and tables, once
-make warm-models                             # download the embedding model once
-make agent                                   # terminal chat, now audited (--no-audit to skip)
-make ui                                      # Streamlit chat on http://localhost:8501
-make test                                    # offline tests
-uv run pytest -m integration                 # live checks (database, LLM, UI)
+make agent-db-setup     # once: agent user and view (3b)
+make audit-db-setup     # once: audit schema, table and the two logins (needs envs/audit_sqlserver.env)
+make agent              # terminal chat; every turn is audited
+make ui                 # Streamlit chat and audit viewer on http://localhost:8501
 ```
 
-Copy `envs/audit_sqlserver.example.env` to `envs/audit_sqlserver.env` and set both passwords first.
+`envs/audit_sqlserver.env` holds the writer and reader logins (`MSSQL_AUDIT_WRITER_USER` and `_PASSWORD`,
+`MSSQL_AUDIT_READER_USER` and `_PASSWORD`); the server, driver and database come from `envs/agent_sqlserver.env`.
+Read the log by hand with the reader login, or through the UI's Audit log tab. If the audit log is unavailable the
+sidebar shows "Audit log: off" and each turn shows a warning. Recovery: run `make audit-db-setup` and check the env
+file. Restart `make ui` after code changes (the file watcher is off). Needs `streamlit` and `pandas`
+(`uv add streamlit pandas`).
 
 ## What's Next
 
-Nothing in the original design is left unbuilt. Known limits: a failed audit write is lost apart from the
-warning (a local spool file that is replayed later would close the gap); the database owner can edit the
-table; there is no login, so the log records chats, not people; one user at a time; free-tier quotas apply to
-every turn. If the tool is ever used by more than one person, the first changes are a persistent
-checkpointer, per-user sessions and an authenticated viewer.
+The rewrite covers all five phases. Open items: tests for `src/agent/` and `src/ui/` (the graph, `turn.py` and
+`audit.py` were built to be tested without live services), returning `unavailable` from the weather and SOP
+tools, prompt caching (see the `TODO` in `graph.py`), a durable checkpointer, and a self-check in the audit
+script.

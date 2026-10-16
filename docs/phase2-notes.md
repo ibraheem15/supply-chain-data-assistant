@@ -16,8 +16,7 @@ User question → Agent decides: structured or unstructured? → text2sql/MCP (D
 docs/
 ├── problem_statement.md          # Original problem framing; open questions this phase answers
 ├── research.md                   # Working notes: the decisions and why, in diagram form
-├── technical-design-doc.html     # The TDD: business context, scope, HLD, LLD, governance
-├── technical-design-doc.pdf
+├── technical-design-doc.pdf     # The TDD: business context, scope, HLD, LLD, governance
 ├── business-pitch.html           # Stakeholder-facing pitch deck version of the same decisions
 ├── business-pitch-print.html
 ├── business-pitch.pdf
@@ -114,7 +113,7 @@ was written or changed.
 
 ## Run
 
-Nothing to run — view [`technical-design-doc.html`](technical-design-doc.html) and
+Nothing to run — view [`technical-design-doc.pdf`](technical-design-doc.pdf) and
 [`business-pitch.html`](business-pitch.html) directly in a browser, or read
 [`research.md`](research.md) as Markdown.
 

@@ -1,15 +1,112 @@
 # Supply Chain FDE Project
 
-An agentic AI chat interface over a legacy SQL Server supply-chain dataset. See [`docs/problem_statement.md`](docs/problem_statement.md) for the full problem framing.
+**Ask questions about a locked-down legacy supply-chain database in plain English, and get answers grounded in the data and the company's own procedures.**
+
+A forward-deployed-engineering (FDE) project: an AI agent that answers questions about cold-chain incidents, using the client's historical SQL Server data and its standard operating procedures (SOPs), with the database protected by a read-only identity.
+
+## The problem
+
+A logistics client keeps its operational history (32,065 hourly records, 26 columns: GPS position, cargo temperature, traffic congestion, delays, risk class) in a legacy **Microsoft SQL Server 2022** database. The database has **no API**, requires credentials, and the data is protected. The client's rules for handling incidents (for example, what to do when cargo goes above 4 °C) live in separate SOP documents.
+
+So today, answering "what happened, and what should we do about it?" means a person writes SQL, reads a policy document, and joins the two in their head. A fixed dashboard doesn't help much either: it only answers the questions someone thought of in advance.
+
+## The solution
+
+A chat agent that does that work for the user. The user asks a question; the agent decides what it needs, fetches it, and replies with a short, cited answer.
+
+Example questions it is built for:
+
+- "How many readings were above 4 °C, and what does the SOP say to do about a breach?"
+- "Which readings were nearest this location, and what is the weather there now?"
+- "And in 2024?" (follow-ups work, because the conversation is remembered)
+
+## How it works
+
+```
+ question ──► Agent (LangGraph, Gemini or Groq) ◄──► MCP server ──┬─ SQL tool     ──► SQL Server (read-only view)
+                  │  decides which tool to use,                   ├─ SOP search   ──► Pinecone (company procedures)
+                  │  loops until it can answer                    └─ Weather tool ──► Open-Meteo (live weather)
+                  ▼
+            cited answer
+```
+
+| Part | What it does |
+| --- | --- |
+| **Agent** | A LangGraph loop around an LLM: it decides which tool a question needs, calls it, reads the result and repeats until it can answer. Remembers earlier turns of the conversation. |
+| **Tools (MCP server)** | Three tools with a clear contract, exposed over the Model Context Protocol: query historical data, search the SOPs, fetch live weather. The agent sees only this defined surface, never the database directly. |
+| **SOP search (RAG)** | The SOP documents are split into chunks, turned into vectors with a local embedding model and stored in Pinecone. The agent searches by meaning and quotes the source. The pipeline syncs incrementally, so only changed files are re-processed. |
+| **Safe database access** | The agent connects as a dedicated SQL Server login that can only `SELECT` from one view. The view translates the legacy column names into business names. Everything else is denied by the database itself. |
+
+### What happens when a user asks a question
+
+The agent follows the **ReAct** pattern (reason, act, observe): the LLM reasons about what it needs, asks for a tool, reads the result, and repeats until it can answer. The LLM never runs anything itself; our code runs the tool and hands back the result.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant C as Terminal chat
+    participant G as Agent graph (LangGraph)
+    participant L as LLM (Gemini or Groq)
+    participant M as MCP server
+    participant D as Data sources
+
+    U->>C: "How many readings were above 4 C, and what does the SOP say?"
+    C->>G: question + conversation id (memory)
+    loop Reason, act, observe, until the LLM answers in plain text
+        G->>L: system prompt + conversation so far + tool descriptions
+        L-->>G: "call tool X with these arguments" (or the final answer)
+        opt the LLM asked for a tool
+            G->>M: call tool X
+            M->>D: SQL (read-only view), SOP search or weather request
+            D-->>M: rows, SOP passages or weather
+            M-->>G: result (status ok or error)
+            Note over G: result is added to the conversation
+        end
+    end
+    G-->>C: final answer with SOP citation
+    C-->>U: answer
+    Note over G: the whole exchange is saved under the conversation id, so a follow-up like "and in 2024?" works
+```
+
+The same loop as a graph (this is the code in `src/agent/graph.py`):
+
+```mermaid
+flowchart LR
+    S([Question]) --> R["Reasoner<br/>LLM + system prompt"]
+    R -->|"asks for a tool"| T["Tools<br/>run via MCP server"]
+    T -->|"tool result"| R
+    R -->|"plain-text reply"| E([Answer to the user])
+```
+
+Two details worth knowing:
+
+- **One question can use several tools.** For example, the agent can look up the incident in SQL, search the SOP for the matching rule, and then answer. Each trip around the loop is one more LLM call.
+- **Tool errors don't stop the agent.** A failed tool call comes back as a result the LLM can read, so it can fix its input and retry, or tell the user that a source is unavailable.
+
+## Why it can be trusted with company data
+
+- **Least privilege, enforced by the database.** The agent's login has `SELECT` on a single view and nothing else. Even if the agent or its prompt were manipulated, the database refuses writes and access to the raw tables.
+- **Defence in depth.** On top of the permissions, queries are validated (one `SELECT` only), capped at 50 rows and given timeouts.
+- **Grounded answers.** The agent is told never to invent numbers, causes or procedures, and to cite the SOP source. If the tools return nothing useful, it says so.
+- **Failures are data, not crashes.** Tool errors come back to the agent as structured results it can react to.
+- **Audit trail** (built in the reference implementation, see status below). Every turn can be logged by an insert-only login and read through a select-only one.
+
+## Stack
+
+Python · Microsoft SQL Server 2022 (Docker) · Pinecone · sentence-transformers (local embeddings) · LangGraph / LangChain · Model Context Protocol (FastMCP) · Gemini or Groq · uv · Docker
+
+## Status and how this repo is organised
+
+Phases 1 to 5 (data loading, SOP ingestion, agent security layer, tools, agent, audit log and Streamlit UI) were built first as a complete reference implementation, kept in [`src_reference/`](src_reference/). This branch (`rewrite-by-hand`) is a from-scratch rewrite in `src/`, written by hand to learn each concept properly. It now covers all five phases: loader, SOP ingestion, security view, tools, MCP server, agent, terminal chat, audit log and Streamlit UI (the UI was adapted from the reference implementation, the rest was written by hand). The tests are still to be rewritten. The problem framing is in [`docs/problem_statement.md`](docs/problem_statement.md).
 
 ## Phase Status
 
-> **Rewrite in progress (branch `rewrite-by-hand`).** The code is being rewritten by hand, phase by phase, in `src/`. The original AI-written implementation is kept in `src_reference/` for comparison. Rewritten so far: Phases 1 and 3 (3a, 3b, 3c). `src/agent/` and `src/ui/` (Phases 4 and 5) are not rewritten yet, so the table and the structure tree below describe the complete reference implementation. The `tests/` folder and some Makefile targets (`test`, `sop-ingest-dry-run`) also still belong to the reference code.
+> **Rewrite in progress (branch `rewrite-by-hand`).** The code is being rewritten by hand, phase by phase, in `src/`. The original AI-written implementation is kept in `src_reference/` for comparison. Rewritten so far: Phases 1, 3 (3a, 3b, 3c), 4 (`src/agent/`: `llm.py`, `tools.py`, `prompts.py`, `graph.py`, `cli.py`) and 5 (audit log: `audit.py`, `turn.py`, `setup_audit_log.sql`; Streamlit UI in `src/ui/`, adapted from the reference implementation). The tests and the Phase 5 notes are not rewritten yet, and the structure tree below shows the reference layout. The `tests/` folder and some Makefile targets (`test`, `sop-ingest-dry-run`) also still belong to the reference code.
 
 | Phase | Status | Docs |
 | --- | --- | --- |
 | 1 — Local SQL Server development environment | Complete: Docker container running, CSV validated and published to `dbo.supply_chain_logistics` | [`docs/phase1-plan.md`](docs/phase1-plan.md), [`docs/phase1-notes.md`](docs/phase1-notes.md) |
-| 2 — Solution exploration | Complete: business case and technical design (HLD/LLD) drafted; some LLD items (chunking strategy, SOP ingestion pipeline) deferred to Phase 3 | [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.html`](docs/technical-design-doc.html), [`docs/business-pitch.html`](docs/business-pitch.html), [`docs/phase2-notes.md`](docs/phase2-notes.md) |
+| 2 — Solution exploration | Complete: business case and technical design (HLD/LLD) drafted; some LLD items (chunking strategy, SOP ingestion pipeline) deferred to Phase 3 | [`docs/research.md`](docs/research.md), [`docs/technical-design-doc.pdf`](docs/technical-design-doc.pdf), [`docs/business-pitch.html`](docs/business-pitch.html), [`docs/phase2-notes.md`](docs/phase2-notes.md) |
 | 3 — Implementation | Complete: SOP ingestion (3a), read-only agent user + semantic view (3b), and the three agent tools behind an MCP server (3c) | [`docs/phase3-notes.md`](docs/phase3-notes.md), [`docs/phase-3-plan.md`](docs/phase-3-plan.md) |
 | 4 — Agent orchestration | Complete: LangGraph ReAct agent (Gemini or Groq reasoner) calling the Phase 3 tools via MCP, with a terminal chat (`make agent`) | [`docs/phase4-notes.md`](docs/phase4-notes.md), [`docs/phase-4-plan.md`](docs/phase-4-plan.md) |
 | 5 — Audit log and Streamlit UI | Complete: append-only audit log with insert-only and read-only logins (5a), and a single-chat Streamlit UI with live tool cards and an audit viewer (5b) | [`docs/phase5-notes.md`](docs/phase5-notes.md), [`docs/phase5-plan.md`](docs/phase5-plan.md) |
@@ -72,7 +169,7 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   ├── research.md                 # Source of truth: architecture, phases, DDD, roadmap
 │   ├── domain-model.md             # Canonical class/dependency diagram (current code only)
 │   ├── domain-model.html           # domain-model.md, rendered
-│   ├── technical-design-doc.html   # Phase 2 TDD draft (HLD/LLD); implemented in Phases 3 to 5
+│   ├── technical-design-doc.pdf   # Phase 2 TDD draft (HLD/LLD); implemented in Phases 3 to 5
 │   ├── business-pitch.html         # Phase 2 business case draft
 │   ├── phase2-notes.md             # Phase 2 retrospective and items deferred to Phase 3
 │   ├── phase-3-plan.md             # Phase 3 design: SOP ingestion (3a), agent security layer (3b), agent tools (3c)

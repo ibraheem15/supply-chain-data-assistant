@@ -1,14 +1,14 @@
-# Phase 4 Notes: Agent Orchestration
+# Phase 4 Notes: Agent Orchestration (hand-written rewrite)
 
-**Status: Phase 4 is complete.** The orchestrator (4a) is built. The audit log and the Streamlit UI,
-originally planned here as 4b and 4c, moved to Phase 5 ([`phase5-plan.md`](phase5-plan.md)). See
-[`phase-4-plan.md`](phase-4-plan.md) for the design.
+**Status: Phase 4 is complete in the rewrite.** The orchestrator was written by hand in `src/agent/`. The
+original AI-written version is in `src_reference/agent/` (it also holds the audit log and the UI, which belong to
+Phase 5 and are not rewritten yet). See [`phase-4-plan.md`](phase-4-plan.md) for the original design. This file
+describes the rewrite, and says where it differs from that plan.
 
 ## What We Built
 
-A LangGraph ReAct agent: an LLM (Gemini by default, or Groq) reasons about each question, calls the Phase 3 tools through
-the MCP server when it needs data, and answers in a terminal chat that remembers the
-conversation.
+A LangGraph ReAct agent: an LLM (Gemini by default, or Groq) reasons about each question, calls the Phase 3 tools
+through the MCP server when it needs data, and answers in a terminal chat that remembers the conversation.
 
 ```
 question -> Reasoner (Gemini or Groq) <-> Tools (MCP: SQL | weather | SOP) -> cited answer
@@ -18,223 +18,180 @@ question -> Reasoner (Gemini or Groq) <-> Tools (MCP: SQL | weather | SOP) -> ci
 
 ```
 src/
-├── data/                  # Phase 1, 3a, 3b (+ __init__.py)
-├── resources/             # Phase 3c: the three tools and the MCP server
+├── data/                  # Phase 1, 3a, 3b
+├── resources/             # Phase 3c: the three tools and the MCP server (FastMCP)
 │   └── mcp_server.py
-└── agent/                 # Phase 4a
-    ├── llm.py             # Gemini or Groq by LLM_PROVIDER: temperature 0, max_retries 1, 60s timeout
+└── agent/                 # Phase 4
+    ├── __init__.py
+    ├── llm.py             # build_llm(provider): Gemini or Groq from LLM.env, temperature 0, max_retries 1
     ├── prompts.py         # SYSTEM_PROMPT + build_system_prompt(today)
-    ├── tools.py           # one persistent MCP stdio session -> LangChain tools
-    ├── graph.py           # build_graph(llm, tools, checkpointer): pure wiring, no I/O
-    └── cli.py             # python -m agent.cli [--verbose]
-tests/
-├── test_agent_graph.py    # routing, memory, step limit, prompt, error messages (fake LLM)
-├── test_agent_config.py   # LLM settings
-└── test_agent_live.py     # integration: real Gemini + real MCP server
+    ├── tools.py           # StdioTransport + open_adapter(): MCP server -> LangChain tools
+    ├── graph.py           # build_graph(llm, tools): pure wiring, no I/O
+    └── cli.py             # python -m agent.cli
+```
+
+There are no tests for `src/agent/` yet. `tests/` still targets the original code.
+
+## How an agent works
+
+An LLM never runs anything. It returns a message that says "call this tool with these arguments". The code runs
+the tool, appends the result to the conversation and calls the LLM again. When the LLM replies with plain text
+instead of a tool request, that text is the answer. This is the ReAct pattern (reason, act, observe).
+
+```mermaid
+flowchart LR
+    S([START]) --> R["reasoner<br/>system prompt + messages -> LLM"]
+    R -->|"tools_condition: tool requested"| T["tools<br/>ToolNode"]
+    R -->|"tools_condition: plain text"| E([END])
+    T --> R
 ```
 
 ## Topic Sections
 
-### The ReAct graph
+### The graph (`graph.py`)
 
-START connects to the Reasoner only. After every Reasoner step, a conditional edge asks one
-question: did the model request a tool? If yes the flow goes to Tools, and Tools always return
-to the Reasoner. If no it goes to END. (The first draft of the plan connected END to Tools,
-which is wrong: END is reached from the Reasoner.)
+`build_graph(llm, tools)` takes the model and the tools as arguments and returns a compiled graph. It knows nothing
+about Gemini, Groq or MCP, which keeps it free of I/O and easy to test with a fake model.
 
-| Piece | LangGraph building block |
+- **State** is `MessagesState`: a dictionary with one key, `"messages"`, a list that new messages are appended to.
+  It is read as `state["messages"]` (attribute access fails).
+- **`llm.bind_tools(tools)`** attaches each tool's name, description and argument schema to every request. Without
+  it the model never asks for a tool and answers from memory. This is where the `@mcp.tool(description=...)` text
+  reaches the model.
+- **The reasoner node** is an `async` function: it builds `[SystemMessage(...)] + state["messages"]`, calls
+  `await llm_with_tools.ainvoke(...)` and returns only the new message, `{"messages": [reply]}`.
+- **The tools node** is the ready-made `ToolNode(tools)`. It runs every tool call in the last message and appends
+  the results.
+- **`tools_condition`** is a routing function, not a node. After the reasoner it looks at the last message and
+  returns `"tools"` if the LLM asked for a tool, otherwise `END`. It never calls a tool and never sees tool output.
+  The string `"tools"` is what links it to the node registered with `add_node("tools", ...)`.
+- **`add_edge("tools", "reasoner")`** is the loop-back that makes it an agent.
+- **`MemorySaver`** (a checkpointer) saves the state after every step under a `thread_id` and loads it at the start
+  of the next call, so a follow-up question remembers the earlier ones. It lives in RAM and is lost on restart.
+- **The reply is not sent by the graph.** It is the last message in the final state. The caller (`cli.py`) reads
+  `result["messages"][-1].text` and prints it. The graph produces, the CLI delivers.
+
+### The system prompt (`prompts.py`)
+
+The system prompt is added inside the reasoner on every call and is **not stored in the state**. If it were
+stored, each turn would append another copy, the saved history would fill with duplicates and every request would
+pay for them. The LLM still receives the prompt on every call (LLM calls are stateless), exactly once.
+`build_system_prompt()` fills a `{today}` placeholder with `.replace`, not an f-string, because the prompt may
+contain other braces.
+
+The tool descriptions (in `mcp_server.py`) say what one tool does; the system prompt holds the rules for the whole
+agent: which tool for what, what never to do, how to answer. The prompt was started from the original and trimmed
+by hand. Because it is paid for on every LLM call, and one question can take several calls, a shorter prompt saves
+tokens on a free tier. Provider-side prompt caching might reduce the cost further. It is left as a `TODO` in
+`graph.py` until real token numbers show it matters.
+
+### Reaching the tools through MCP (`tools.py`)
+
+`langchain-mcp-adapters`, the library the original used, needs `mcp<2`, but the project's server used `mcp>=2`.
+Three options were weighed: downgrade `mcp`, write the conversion by hand, or use LangChain's newer `MCPAdapter`
+(`langchain.mcp`, in the `langchain[mcp]` extra, built on `fastmcp`). The conversion was first written by hand
+(one `StructuredTool` per MCP tool, with the MCP `inputSchema` as `args_schema`) to see what an adapter does, and
+then replaced by `MCPAdapter`. Consequences:
+
+- The server switched from `mcp.server.mcpserver.MCPServer` to `fastmcp.FastMCP`, so client and server use one
+  MCP library. The `mcp` dependency was dropped. `run(transport="stdio", show_banner=False)` keeps the startup
+  banner off the protocol channel.
+- A local server cannot be given to `MCPAdapter` as a plain string (only `http(s)` URLs are accepted). It takes a
+  transport object: `StdioTransport(command="uv", args=["run", "python", "-m", "resources.mcp_server"],
+  env={"PYTHONPATH": "src"})`. The transport only describes how to start the server; nothing runs until
+  `async with`.
+- `MCPAdapter` is marked beta (it prints a `LangChainBetaWarning`), so the API may change.
+- It turns a failed tool call into a `ToolException`, so an error becomes a message the agent can read.
+
+**How stdio works behind the scenes.** With stdio there is no URL. The client starts the server as a child
+process and they exchange JSON-RPC messages through the child's stdin and stdout. A client first sends
+`initialize`, then `tools/list`, then `tools/call`. With HTTP the server runs on its own at a URL and many clients
+can share it. stdio fits one agent on one machine; HTTP would fit a shared service, and only the transport line
+would change.
+
+**The session must outlive the tools.** The whole chat runs inside `async with open_adapter()`, so the MCP server
+starts once and stays alive. Outside that block the tools reconnect on every call, which starts a new server
+process each time and would reload the embedding model on every SOP search.
+
+### Choosing the LLM (`llm.py`)
+
+`build_llm(provider)` returns a Gemini or Groq chat model. `LLM_PROVIDER` in `envs/LLM.env` sets the default.
+`temperature=0` makes tool choice and SQL generation repeatable, and `max_retries=1` keeps free-tier quota safe.
+Each provider is imported inside its own branch, so only the one in use is loaded. Settings are read with
+`settings["KEY"]`, not `.get`, so a missing key raises a clear `KeyError` immediately.
+
+**Reading the reply: `.text`, not `.content`.** A Gemini 3 reply's `.content` can be a list of blocks that includes
+a `signature` field. `.text` joins only the text parts into one string, and Groq returns a plain string either
+way. Use `.text` wherever an answer is shown.
+
+### The terminal chat (`cli.py`)
+
+`cli.py` is the outer shell that the graph deliberately does not have: it opens the adapter, loads the tools, builds
+the LLM and the graph, picks a random `thread_id` (one conversation per run) and loops: read a question, call
+`graph.ainvoke({"messages": [("user", question)]}, config=...)`, print the last message. Everything runs inside
+the `async with`.
+
+### Problems found while building
+
+- **A printed key.** A debug `print(settings)` put real API keys in the terminal. Keys that were printed must be
+  rotated, and secrets must never be printed or pasted. Print only what is needed (`.text` of a reply).
+- **`print` inside a tool does not show.** A tool runs in the MCP server's child process, and that process's stdout
+  is the protocol channel back to the client. A stray `print` goes into that pipe and can corrupt a message. Debug
+  to stderr (`print(..., file=sys.stderr)`) or look at the tool calls in the final state's messages.
+- **Wrong imports.** `from src.agent import llm` imported the module, so `llm.bind_tools` did not exist (the model
+  is a function argument), and `src.` prefixes only work from the project root. Imports are `from agent...` with
+  `PYTHONPATH=src`.
+- **A missing `return`.** `build_graph` ended without `return builder.compile(...)` and returned `None`.
+
+## Accepted limits
+
+| Limit | Why it is accepted for now |
 | --- | --- |
-| State | `MessagesState`: the message list, with the `add_messages` reducer (append, not overwrite) |
-| Reasoner | An async function: system prompt + messages -> `llm.bind_tools(tools)` -> new `AIMessage` |
-| Tools | `ToolNode(tools)` runs every tool call in the last `AIMessage` and returns `ToolMessage`s |
-| Routing | `tools_condition`: `"tools"` or `END` |
-| Memory | `compile(checkpointer=MemorySaver())` and `thread_id` in the run config |
-
-The system prompt is added inside the Reasoner on each call and is never stored in state, so
-the checkpointer does not save a copy of it every turn. `graph.py` takes the LLM and tools as
-arguments and reads no files, which is what lets the tests use a scripted fake model.
-
-### Reaching the tools through MCP
-
-`tools.py` starts the Phase 3c server as a subprocess (`sys.executable -m resources.mcp_server`)
-and keeps **one session open for the whole chat**. By default each tool call would start a new
-server process, which would reload the embedding model on every SOP search. The adapter turns
-each MCP tool into a LangChain tool; the model sees only the tool names, descriptions and
-argument schemas, never the Python functions or the database.
-
-### Choosing the LLM provider (Gemini or Groq)
-
-`LLM_PROVIDER` in `envs/LLM.env` picks the provider (`gemini` by default); `--provider groq` on the
-CLI overrides it for one run, and `make agent AGENT_ARGS="--provider groq --verbose"` passes it
-through. `llm.py` returns a LangChain chat model either way, so the graph, tools and tests do not
-change. It was added because Gemini's free tier (20 requests per day per model) blocked live testing.
-Settings per provider: `GEMINI_API_KEY`/`GEMINI_MODEL`, `GROQ_API_KEY`/`GROQ_MODEL`.
-
-Groq notes: `ChatGroq` turns `temperature=0` into `1e-8` (the Groq API rejects exactly 0). The model
-names a provider offers change, so check them: `llama-3.1-8b-instant` returned `404 model_not_found`
-on this account, and `GET https://api.groq.com/openai/v1/models` listed `openai/gpt-oss-120b`,
-`openai/gpt-oss-20b` and `qwen/qwen3.8-27b` as chat models. `openai/gpt-oss-120b` handled all three
-tools correctly (below). A model that cannot call tools will not work with this agent.
-
-### Keeping requests small (free-tier token limits)
-
-Free tiers limit tokens per minute and per day, so every request is kept lean. Measured in
-approximate tokens (characters / 4):
-
-| Part of a request | Before | After | How |
-| --- | --- | --- | --- |
-| System prompt + tool descriptions (sent every time) | ~1,600 | ~1,070 | Shorter prompt; column list and legacy-name glossary merged into one line per column (`iot_temperature (IOT_TEMP_C): ...`); terse tool descriptions |
-| Conversation history | unbounded | ~3,000 | `window_messages()` in `graph.py` sends the current question in full plus as many recent older messages as fit. It starts on a human message so no tool result loses its tool call. Only what is *sent* is trimmed: the checkpointer still keeps the whole conversation |
-| One SQL result | up to 200 rows | up to 50 rows and ~4,000 characters | `MAX_ROWS=50`, `MAX_RESULT_CHARS=4000`; `truncated` tells the model so it aggregates instead |
-| Tool result format | pretty-printed JSON | compact JSON | `mcp_server.py` returns `compact(result)`; the default indentation cost tokens on every result |
-| SOP search | 4 passages | 3 passages | default `top_k=3` |
-| Answer length | unbounded | 4,096 tokens | `MAX_OUTPUT_TOKENS` on both providers. Reasoning models count hidden reasoning toward it: 2,048 was first used and was too small (see `phase5-notes.md`), so it was raised to 4,096 and `reasoning_effort="low"` is set for the `gpt-oss` models |
-
-The schema context also stays under 2,600 characters (asserted by a test), and tests cover the window (current
-tool loop never trimmed, never starts on an orphan tool message, memory keeps everything).
-
-**Wasted-request guard.** In a live run the model copied legacy names from the SOP (`IOT_TEMP_C`,
-`RISK_CLASS`) into its SQL, got an error from SQL Server and needed another model call to fix it, which
-spends free-tier quota. Two fixes: the schema text now says only the business names are columns and
-marks legacy names as `[SOP: ...]` (documents only), and `validate_sql()` rejects any legacy column name
-locally with the exact correction (`IOT_TEMP_C is a legacy name ... Use iot_temperature`), so the
-database is not called. The model still needs one retry in that case, but with a precise message.
-
-### Deprecations
-
-Our own code uses no deprecated API: `@asynccontextmanager` functions are annotated
-`-> AsyncGenerator[...]` (not `AsyncIterator`, which is deprecated for this use), `create_react_agent`
-is not used (the graph is built from `StateGraph`, `ToolNode` and `tools_condition`), and `mcp`'s
-`FastMCP` is the supported API in the pinned 1.x. Two warnings remain, both from third-party packages
-under Python 3.14, not from this repository: `google.genai` (`_UnionGenericAlias`) and `langsmith`
-(`asyncio.iscoroutinefunction`). They disappear when those packages release a fix; check with
-`uv run pytest -W default`.
-
-### The system prompt
-
-Written as part of the plan and kept in `prompts.py`. It tells the model which tool is for
-what, to treat `error` as "fix your input and retry (twice at most)" and `unavailable` as "say
-the source is down, never guess", to cite SOP sources, to translate legacy column names, to ask
-a clarifying question when there is no shipment id, to separate today's date from the data's
-end date (2024-08-29), and to refuse writes. A test asserts that each rule is present, so an
-edit that drops one fails.
-
-The prompt was later rewritten by the project owner as a "Senior Data Scientist" persona with a fixed
-three-part report (Executive Summary, Telemetry & Environment Analysis, Action Plan), then revised after
-live runs exposed three failures. `prompts.py` is the source of truth; the prompt text in
-`phase-4-plan.md` is the original draft.
-
-| Live failure | Rule added |
-| --- | --- |
-| "Find shipments near Los Angeles" returned an averaged position, an averaged temperature and a "current" shipment that does not exist | Data is historical; list the nearest real readings (`TOP 5 ... ORDER BY` distance) with their own timestamps; never average coordinates or temperatures; say "most recent matching reading", never "current" or "active" |
-| The report template's "Current Temp" column and "environment or equipment?" line pushed the model to name an invented cause | Columns renamed (reading time, temp, weather now (live)); a cause is stated only if the data shows it |
-| Readings of -8 to -10 C were called compliant ("temperatures remain within SOP limits") because the SOP text only defines "above 4.0 C = breach" | Fresh perishables must stay between 0.0 and 4.0 C; below 0.0 C is a COLD breach; never call a reading outside the range compliant; the SOP's mitigation steps cover only above 4.0 C, so for a cold breach say there are none and recommend a supervisor review |
-| A simple count would have been padded into a three-part report | The report structure applies to incident and analysis questions; simple factual questions get 1-3 sentences |
-
-Lesson: the SOP document itself was ambiguous (a range, but a breach rule for one side only), and the
-model followed the narrower reading. Business rules the SOP leaves implicit have to be stated in the prompt,
-or better, fixed in the SOP.
-
-### Loop control and failures
-
-`recursion_limit=12` per question (about five tool rounds) protects the free quota from a
-looping agent. The CLI turns the three expected failures into plain messages: step limit
-reached, quota or rate limit, and Gemini overloaded (HTTP 503). It never prints a traceback and
-never ends the chat. The 3c tools never raise, so a failing tool is just another message the
-model reads.
-
-### Dependency upgrade (a problem found while building)
-
-The plan said `langgraph` and `langchain-mcp-adapters` could be added to the existing lockfile.
-That was wrong, for two reasons that only appeared when the code ran:
-
-1. `langchain-mcp-adapters` 0.2+ needs `langchain-core` 1.x, and 0.1.x needs `mcp` 1.x. No
-   version works with `langchain-core` 0.3 and `mcp` 2.x together.
-2. The Gemini 3 family returns "thought signatures" on tool calls and rejects the next request
-   if they are missing (`400: Function call is missing a thought_signature`). `langchain-google-genai`
-   2.x drops them; 4.x keeps them.
-
-So the LangChain family moved to 1.x (`langchain-core`, `text-splitters`, `huggingface`, `google-genai`
-4.x, `pinecone`, `mcp-adapters` 0.3) and `mcp` was pinned back to `<2` (the server uses
-`FastMCP` again). The Phase 1 and 3a ingestion dry runs, all offline tests and the live SQL and
-SOP tests pass after the upgrade.
-
-After that, all remaining dependencies were upgraded to their latest versions (`uv lock --upgrade`,
-with the upper caps on `langgraph`, `sentence-transformers` and `pypdf` removed): `langgraph` 1.2,
-`sentence-transformers` 6, `transformers` 5, `pypdf` 6, `pytest` 9, `pinecone` 7. Two packages are
-held back by their dependents rather than by choice: `mcp` stays below 2 because
-`langchain-mcp-adapters` requires it, and `pinecone` stops at 7 because `langchain-pinecone` does.
-The same checks pass after this second upgrade (59 offline tests, both ingestion dry runs, live SQL
-and SOP tests).
-
-A smaller lesson: an earlier compatibility check used `uv run --with ...`, which builds a
-throwaway environment, so it did not test the project's real dependency set. Verify against the
-project environment.
+| No step limit on the loop | An agent that keeps asking for tools would run until the model stops. A routing function with a counter would cap it |
+| No error handling in `cli.py` | A quota error (429) or a network failure ends the chat with a traceback. A `try/except` around `ainvoke` would keep it alive |
+| Tools return only `ok` or `error` | The prompt already says what to do for `unavailable`, but `weather_tool` and `sop_tool` do not return it yet |
+| `MemorySaver` | Conversations are lost on restart. A SQLite or Postgres checkpointer would make them durable |
+| One MCP session per chat | Fine for a terminal. A multi-user app would need a different lifetime |
+| No tests for `src/agent/` | The graph is built to be tested with a fake LLM; the tests are not written yet |
 
 ## Python Concepts: Quick Reference
 
-| Concept | Where used | What it's for |
+| Concept | Where used | Note |
 | --- | --- | --- |
-| `async def` / `await` / `asyncio.run` | whole `agent/` package | the MCP adapter tools are async only, so the graph is run with `ainvoke`/`astream` |
-| `@asynccontextmanager` | `tools.py` `mcp_tools()` | opens the MCP session on entry and closes it on exit, even on error |
-| `async for` | `cli.py` `ask()` | consumes the graph's stream of per-node updates |
-| `asyncio.to_thread(input, ...)` | `cli.py` | reads a line from the terminal without blocking the event loop |
-| `ExceptionGroup` | `error_text()` | async task groups wrap errors in a group; the helper unwraps it to read the message |
-| Subclassing `BaseChatModel` | `tests/test_agent_graph.py` | a scripted fake LLM: the test decides each reply and records every input |
+| `async def` / `await` / `asyncio.run` | `tools.py`, `graph.py`, `cli.py` | The MCP tools are async, so the whole agent is |
+| `async with` | `cli.py` | Opens the MCP session and closes it when the block ends |
+| Closure (function inside a function) | `reasoner` in `graph.py` | It uses `llm_with_tools` from the enclosing function |
+| Dictionary as state | `state["messages"]`, `{"messages": [reply]}` | Nodes return only what to add |
+| `str.replace` for templates | `build_system_prompt` | Safe when the text contains other `{}` |
+| Lazy import inside a branch | `llm.py` | Loads only the provider in use |
+| `uuid.uuid4()` | `cli.py` | A unique conversation id per run |
 
 ## FDE / DDD Concepts
 
-- **ReAct (reason and act)**: the model alternates between thinking and calling tools until it
-  can answer. The graph is the control loop; the model only chooses the next step.
-- **State as the single source of truth**: the message list is the whole state, so memory,
-  step limits and (later) the audit log attach to the graph.
-- **Dependency direction**: `agent/` reaches `resources/` only through MCP; `resources/` knows
-  nothing about the agent. `graph.py` has no I/O dependencies.
-- **Interface as Contract**: the model's world is three tool descriptions. A good description
-  is part of the interface, which is why `mcp_server.py` carries the schema and the rules.
-- **Deterministic tests for probabilistic systems**: the routing, memory and step-limit
-  behaviour is tested with a scripted fake model. Only the choice of tool by the real model
-  needs live tests.
-- **Evals**: the six-question table in the plan is the first eval set. Each question has an
-  expected tool choice, checked by which tools were called, not by the wording of the answer.
-
-## Verification status
-
-| Check | Result |
+| Concept | Where |
 | --- | --- |
-| Offline tests (71) | Pass |
-| Ingestion dry runs after the dependency upgrade | Pass |
-| Live SQL and SOP tool tests | Pass |
-| Live Gemini: model name and key | Passed once, before the upgrade |
-| Live end to end, "how many readings above 4 degrees" | Passed: the agent called `query_telemetry_data` and answered 8,674 readings |
-| Live end to end through Groq (`openai/gpt-oss-120b`), CLI | **Passed.** SQL question: called `query_telemetry_data`, answered 8,674. SOP question: called `search_compliance_sop`, answered with the 4.0 C threshold, the two dispatcher steps and a source-and-heading citation. Weather question: called `fetch_weather_conditions` and reported the values |
-| Live end to end through Gemini: "delete all rows" | Passed: the agent refused and called no tools |
-| Live end to end through Gemini: SOP and weather questions | **Not yet verified through Gemini.** Gemini first returned HTTP 503 "high demand", then HTTP 429: the free tier allows **20 requests per day per model** and the repeated live runs used them up (resets in about 14 hours). The tests skip on 503 and 429 instead of failing. Run `uv run pytest -m integration tests/test_agent_live.py -s` after the quota resets |
-| CLI behaviour on a provider error | Verified live: with the quota exhausted it printed "Gemini quota or rate limit reached" and kept the chat open |
+| Dependency direction | `agent/` depends on `resources/` only through MCP; `graph.py` depends on no I/O |
+| Interface as Contract | The agent sees three tools and their descriptions over MCP, never the Python functions or the database |
+| State as the single source of truth | The message list is the graph state; the checkpointer gives conversation memory |
+| Separation of orchestration and delivery | The graph writes the answer into the state; the CLI reads and shows it, so a later UI can reuse the graph |
+| Prompt cost | The system prompt is sent on every LLM call, so its length is a running cost |
+| Packages as layers | `agent/` is the orchestration layer above `resources/` above `data/` |
 
 ## Run
 
 ```bash
-uv sync
-make agent-db-setup && make sop-ingest      # data layer, once
-make test                                   # offline tests
-make agent                                  # chat in the terminal
-make agent AGENT_ARGS="--provider groq --verbose"   # pick the provider, show each tool call
-uv run pytest -m integration                # live LLM (the chosen provider) + SQL Server + Pinecone
+PYTHONPATH=src uv run python -m agent.cli      # chat; type exit or quit to leave
+PYTHONPATH=src uv run python -m agent.tools    # smoke test: list the tools, call the weather tool
+PYTHONPATH=src uv run python -m agent.llm      # one short request to the configured model
 ```
 
-Set the key and model for your provider in `envs/LLM.env` (and `LLM_PROVIDER`), and start the SQL Server container
-first (`make sqlserver-up`, or `docker start legacy-sqlserver` if it already exists).
+Needs `envs/LLM.env`, `envs/agent_sqlserver.env` and `envs/vectorDB.env`, the SQL Server container running
+(`make sqlserver-up`), the agent database user created (`make agent-db-setup`) and the SOPs indexed in Pinecone.
+`make agent` runs the same chat (`AGENT_ARGS` options such as `--provider` and `--verbose` belong to the original
+`cli.py`; the rewrite takes none yet), and `make mcp-server` runs the server on its own.
 
 ## What's Next
 
-- **Phase 5a, audit log**: `audit.AgentAuditLog`, written by a login that has `INSERT` and nothing
-  else, so SQL Server enforces "append-only"; read back through a separate read-only login.
-- **Phase 5b, Streamlit UI**: a single-chat UI with live tool-call cards and an audit viewer.
-  See [`phase5-plan.md`](phase5-plan.md).
-- **Quota planning.** A question that uses a tool costs at least two Gemini requests, so 20 a day is
-  about ten questions. Run the live suite once per quota window, and use the scripted fake model
-  for everything else. Moving to a paid tier or a second model removes this limit.
-- Accepted limits until then: in-process memory (lost on restart), no message trimming for very
-  long chats, and free-tier Gemini, which may use submitted content to improve Google's
-  products. Fine for sample data; not for real client data.
+Phase 5 (rewrite): the audit log (an insert-only writer and a select-only reader, one row per event) and the
+Streamlit UI, planned in [`phase5-plan.md`](phase5-plan.md). The shared turn loop that both the CLI and the UI
+call will be written there.

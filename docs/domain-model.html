@@ -293,41 +293,45 @@
 
   <h2>Phase 4a: Agent Orchestrator (<code>src/agent/</code>)</h2>
   <p>A LangGraph ReAct agent. <code>graph.py</code> is pure wiring (the LLM and tools are arguments);
-  <code>llm.py</code> builds the Gemini or Groq chat model, <code>tools.py</code> opens one persistent MCP session to
-  <code>mcp_server.py</code>, <code>prompts.py</code> holds the system prompt, and <code>cli.py</code> is the
-  terminal chat. Graph: <code>START</code> &rarr; <code>Reasoner</code> (LLM + system prompt); after the
+  <code>llm.py</code> builds the Gemini or Groq chat model, <code>tools.py</code> describes how to start
+  <code>mcp_server.py</code> (a <code>StdioTransport</code>) and opens it with LangChain's <code>MCPAdapter</code>,
+  <code>prompts.py</code> holds the system prompt, and <code>cli.py</code> is the terminal chat, which keeps one MCP
+  session open for the whole conversation. Server and client both use FastMCP. Graph: <code>START</code> &rarr; <code>Reasoner</code> (LLM + system prompt); after the
   Reasoner, a tool call goes to <code>Tools</code> (<code>ToolNode</code> over MCP), which returns to the
   Reasoner, and no tool call goes to <code>END</code>.</p>
   <table>
     <tr><th>Concept</th><th>Where</th></tr>
-    <tr><td>Dependency direction</td><td><code>agent/</code> depends on <code>resources/</code> only through MCP; <code>resources/</code> knows nothing about the agent. <code>graph.py</code> depends on no I/O, so it is tested with a scripted fake LLM</td></tr>
+    <tr><td>Dependency direction</td><td><code>agent/</code> depends on <code>resources/</code> only through MCP; <code>resources/</code> knows nothing about the agent. <code>graph.py</code> depends on no I/O: the model and the tools are arguments, so it can be tested with a scripted fake LLM (tests not yet written in the rewrite)</td></tr>
     <tr><td>Interface as Contract</td><td>The agent sees three MCP tools and their descriptions, never the Python functions or the database</td></tr>
     <tr><td>State as the single source of truth</td><td>The message list is the graph state; the checkpointer (<code>MemorySaver</code>, one <code>thread_id</code> per chat) gives conversation memory</td></tr>
     <tr><td>Packages as layers</td><td><code>agent/</code> is the orchestration layer above <code>resources/</code> (application layer) above <code>data/</code></td></tr>
   </table>
 
   <h2>Phase 5: Audit Log (<code>src/agent/audit.py</code>, <code>turn.py</code>) and UI (<code>src/ui/</code>)</h2>
-  <p><code>run_turn()</code> runs one question through the graph and yields typed events; it also writes one
-  audit row per event. The CLI and the UI both consume it, so neither can skip the audit. Flow:
+  <p><code>run_turn()</code> runs one question through the graph (<code>astream</code>, one update per node) and
+  yields typed <code>TurnEvent</code>s; it also writes one audit row per event through <code>audit.record()</code>,
+  which runs the insert in a worker thread, redacts secrets and never raises. The CLI and the UI both consume
+  <code>run_turn()</code>, so neither can skip the audit. Flow:
   <code>cli.py</code> or <code>ui/app.py</code> (via <code>ui/runtime.py</code>, a background thread with its own
   event loop) &rarr; <code>run_turn()</code> &rarr; <code>graph.py</code>; <code>run_turn()</code> &rarr;
-  <code>AuditLogger</code> (<code>USR_FDE_AUDIT_W</code>, INSERT only) &rarr; <code>audit.AgentAuditLog</code>
-  &rarr; <code>AuditReader</code> (<code>USR_FDE_AUDIT_R</code>, SELECT only) &rarr; the audit tab. The agent's own
-  SQL login <code>USR_FDE_RO</code> is denied on the whole <code>audit</code> schema.</p>
+  <code>record()</code> (<code>USR_FDE_AUDIT_W_2</code>, INSERT only) &rarr; <code>audit_2.AgentAuditLog</code>
+  &rarr; <code>AuditReader</code> (<code>USR_FDE_AUDIT_R_2</code>, SELECT only) &rarr; the audit tab. The agent's own
+  SQL login <code>USR_FDE_RO_2</code> is denied on the whole <code>audit_2</code> schema. <code>ui/runtime.py</code>
+  and <code>ui/app.py</code> were adapted from the reference implementation, not written by hand.</p>
   <table>
     <tr><th>Concept</th><th>Where</th></tr>
     <tr><td>Least privilege, separation of duties</td><td>Three logins: the agent acts (read-only on data, denied on <code>audit</code>), the writer records (<code>INSERT</code> only), the reader views (<code>SELECT</code> only)</td></tr>
-    <tr><td>Fail open, but loudly</td><td><code>AuditLogger</code> never raises: a failed write returns a message, the turn yields one <code>audit_warning</code>, and the agent carries on</td></tr>
+    <tr><td>Fail open, but loudly</td><td><code>record()</code> never raises: a failed write returns <code>False</code>, the turn yields one <code>audit_warning</code>, and the agent carries on</td></tr>
     <tr><td>One code path</td><td><code>run_turn()</code> is the only place a turn runs and is audited; <code>graph.py</code> stays free of I/O</td></tr>
     <tr><td>Dependency direction</td><td><code>ui/</code> depends on <code>agent/</code>; <code>agent/</code> does not know the UI exists. <code>resources/db.py</code> is shared by the SQL tool and the audit code</td></tr>
     <tr><td>Packages as layers</td><td><code>ui/</code> (presentation) over <code>agent/</code> (orchestration) over <code>resources/</code> (tools) over <code>data/</code></td></tr>
   </table>
 
-  <h2>Planned, Not Yet Implemented</h2>
-  <p>Nothing from the original design in <a href="research.md">research.md</a> /
-  <a href="technical-design-doc.html">technical-design-doc.html</a> is left unbuilt. Known limits (see
-  <a href="phase5-notes.md">phase5-notes.md</a>): one user at a time, no login, a failed audit write is lost apart
-  from the warning, and the database owner can edit the audit table.</p>
+  <h2>Accepted Limits and Open Items</h2>
+  <p>Known limits (see <a href="phase5-notes.md">phase5-notes.md</a>): one user at a time, no login, a failed audit
+  write is lost apart from the warning, and the database owner can edit the audit table. Still open in the rewrite:
+  tests for <code>src/agent/</code> and <code>src/ui/</code>, and the weather and SOP tools do not return an
+  <code>unavailable</code> status yet.</p>
 </main>
 </body>
 </html>

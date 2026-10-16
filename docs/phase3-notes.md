@@ -271,9 +271,9 @@ option, and the tests in `tests/` still target the original code.
 
 ## What's Next
 
-Phase 4 (rewrite): a LangGraph ReAct agent that decides which tool a question needs and calls the 3c tools
-through the MCP server, planned in [`phase-4-plan.md`](phase-4-plan.md). Phase 5 adds the audit log and the
+Phase 4 (done in the rewrite, see [`phase4-notes.md`](phase4-notes.md)): a LangGraph ReAct agent that decides
+which tool a question needs and calls the 3c tools through the MCP server. Phase 5 adds the audit log and the
 Streamlit UI ([`phase5-plan.md`](phase5-plan.md)).
 
-See [`research.md`](research.md) and [`technical-design-doc.html`](technical-design-doc.html) for the underlying
+See [`research.md`](research.md) and [`technical-design-doc.pdf`](technical-design-doc.pdf) for the underlying
 design.

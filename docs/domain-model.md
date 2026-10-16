@@ -174,8 +174,9 @@ flowchart LR
 ## Phase 4a: Agent Orchestrator (`src/agent/`)
 
 A LangGraph ReAct agent. `graph.py` is pure wiring (the LLM and tools are arguments);
-`llm.py` builds the Gemini or Groq chat model, `tools.py` opens one persistent MCP session to `mcp_server.py`,
-`prompts.py` holds the system prompt, and `cli.py` is the terminal chat.
+`llm.py` builds the Gemini or Groq chat model, `tools.py` describes how to start `mcp_server.py` (a `StdioTransport`)
+and opens it with LangChain's `MCPAdapter`, `prompts.py` holds the system prompt, and `cli.py` is the terminal chat,
+which keeps one MCP session open for the whole conversation. Server and client both use FastMCP.
 
 ```mermaid
 flowchart LR
@@ -187,15 +188,17 @@ flowchart LR
 
 | Concept | Where |
 | --- | --- |
-| Dependency direction | `agent/` depends on `resources/` only through MCP; `resources/` knows nothing about the agent. `graph.py` depends on no I/O, so it is tested with a scripted fake LLM |
+| Dependency direction | `agent/` depends on `resources/` only through MCP; `resources/` knows nothing about the agent. `graph.py` depends on no I/O: the model and the tools are arguments, so it can be tested with a scripted fake LLM (tests not yet written in the rewrite) |
 | Interface as Contract | The agent sees three MCP tools and their descriptions, never the Python functions or the database |
 | State as the single source of truth | The message list is the graph state; the checkpointer (`MemorySaver`, one `thread_id` per chat) gives conversation memory |
 | Packages as layers | `agent/` is the orchestration layer above `resources/` (application layer) above `data/` |
 
 ## Phase 5: Audit Log (`src/agent/audit.py`, `turn.py`) and UI (`src/ui/`)
 
-`run_turn()` runs one question through the graph and yields typed events; it also writes one audit row
-per event. The CLI and the UI both consume it, so neither can skip the audit.
+`run_turn()` runs one question through the graph (`astream`, one update per node) and yields typed
+`TurnEvent`s; it also writes one audit row per event through `audit.record()`, which runs the insert in a worker
+thread, redacts secrets and never raises. The CLI and the UI both consume `run_turn()`, so neither can skip the
+audit. `ui/runtime.py` and `ui/app.py` were adapted from the reference implementation, not written by hand.
 
 ```mermaid
 flowchart LR
@@ -203,23 +206,21 @@ flowchart LR
     UI["ui/app.py\nStreamlit page"] -->|"queue of events"| RT["ui/runtime.py\nbackground thread + event loop"]
     RT --> Turn
     Turn --> Graph["graph.py\nReasoner <-> Tools"]
-    Turn -->|"AuditLogger\nUSR_FDE_AUDIT_W: INSERT only"| Log[("audit.AgentAuditLog")]
-    Log -->|"AuditReader\nUSR_FDE_AUDIT_R: SELECT only"| UI
-    Agent["USR_FDE_RO (agent SQL login)"] -. "denied" .-> Log
+    Turn -->|"record()\nUSR_FDE_AUDIT_W_2: INSERT only"| Log[("audit_2.AgentAuditLog")]
+    Log -->|"AuditReader\nUSR_FDE_AUDIT_R_2: SELECT only"| UI
+    Agent["USR_FDE_RO_2 (agent SQL login)"] -. "denied" .-> Log
 ```
 
 | Concept | Where |
 | --- | --- |
 | Least privilege, separation of duties | Three logins: the agent acts (read-only on data, denied on `audit`), the writer records (`INSERT` only), the reader views (`SELECT` only) |
-| Fail open, but loudly | `AuditLogger` never raises: a failed write returns a message, the turn yields one `audit_warning`, and the agent carries on |
+| Fail open, but loudly | `record()` never raises: a failed write returns `False`, the turn yields one `audit_warning`, and the agent carries on |
 | One code path | `run_turn()` is the only place a turn runs and is audited; `graph.py` stays free of I/O |
 | Dependency direction | `ui/` depends on `agent/`; `agent/` does not know the UI exists. `resources/db.py` is shared by the SQL tool and the audit code |
 | Packages as layers | `ui/` (presentation) over `agent/` (orchestration) over `resources/` (tools) over `data/` |
 
-## Planned, Not Yet Implemented
+## Accepted Limits and Open Items
 
-Nothing from the original design in `research.md` / `technical-design-doc.html` is left unbuilt. Known
-limits (see [`phase5-notes.md`](phase5-notes.md)): one user at a time, no login, a failed audit write is lost
-apart from the warning, and the database owner can edit the audit table.
-
-Until that code exists, this section stays a pointer, not a diagram.
+Known limits (see [`phase5-notes.md`](phase5-notes.md)): one user at a time, no login, a failed audit write is
+lost apart from the warning, and the database owner can edit the audit table. Still open in the rewrite: tests
+for `src/agent/` and `src/ui/`, and the weather and SOP tools do not return an `unavailable` status yet.

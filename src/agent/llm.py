@@ -30,5 +30,13 @@ def build_llm(provider: str | None = None):
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
+def describe_llm(provider: str | None = None) -> tuple[str, str]:
+    """
+    Returns (provider, model name), so the audit log can record which model answered.
+    """
+    provider = provider or settings["LLM_PROVIDER"]
+    return provider, settings[f"{provider.upper()}_MODEL"]
+
+
 if __name__ == "__main__":
-    print(build_llm().invoke("Say hi in 3 words").content)
+    print(build_llm().invoke("Say hi in 3 words").text)
