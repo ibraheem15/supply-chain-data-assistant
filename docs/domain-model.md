@@ -219,6 +219,29 @@ flowchart LR
 | Dependency direction | `ui/` depends on `agent/`; `agent/` does not know the UI exists. `resources/db.py` is shared by the SQL tool and the audit code |
 | Packages as layers | `ui/` (presentation) over `agent/` (orchestration) over `resources/` (tools) over `data/` |
 
+## Phase 6: Role-Based Assistants (`prompts.py`, `graph.py`, `turn.py`)
+
+`prompts.py` holds a shared base prompt and a `ROLES` table (seven department assistants). The caller picks a role
+(`cli.py --role`, or the UI sidebar); `run_turn()` puts it in the per-call config next to `thread_id`, and the graph's
+reasoner builds the system prompt for that role. The same role is written on every audit row. The tools, the data
+and the database permissions are the same for every role.
+
+```mermaid
+flowchart LR
+    CLI["cli.py --role"] --> Turn["run_turn(role)\nturn.py"]
+    UI["ui sidebar: Assistant"] --> Turn
+    Turn -->|"config: thread_id + role"| Reasoner["graph.py reasoner"]
+    Reasoner -->|"build_system_prompt(role)"| Roles["prompts.py ROLES"]
+    Reasoner <--> Tools["Tools via MCP\n(same for every role)"]
+    Turn -->|"Role column"| Log[("audit_2.AgentAuditLog")]
+```
+
+| Concept | Where |
+| --- | --- |
+| Configuration over code | A new assistant is a `ROLES` entry plus an SOP document |
+| Roles are not permissions | Every role reads the same view with the same login; per-team access would need one view and login per role |
+| State vs per-call config | The role is not saved in the graph state; the memory still holds only the conversation |
+
 ## Accepted Limits and Open Items
 
 Known limits (see [`phase5-notes.md`](phase5-notes.md)): one user at a time, no login, a failed audit write is

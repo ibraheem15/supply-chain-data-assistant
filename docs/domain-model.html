@@ -327,6 +327,19 @@
     <tr><td>Packages as layers</td><td><code>ui/</code> (presentation) over <code>agent/</code> (orchestration) over <code>resources/</code> (tools) over <code>data/</code></td></tr>
   </table>
 
+  <h2>Phase 6: Role-Based Assistants (<code>prompts.py</code>, <code>graph.py</code>, <code>turn.py</code>)</h2>
+  <p><code>prompts.py</code> holds a shared base prompt and a <code>ROLES</code> table (seven department assistants).
+  The caller picks a role (<code>cli.py --role</code>, or the UI sidebar); <code>run_turn()</code> puts it in the
+  per-call config next to <code>thread_id</code>, and the graph's reasoner builds the system prompt for that role.
+  The same role is written on every audit row. The tools, the data and the database permissions are the same for
+  every role.</p>
+  <table>
+    <tr><th>Concept</th><th>Where</th></tr>
+    <tr><td>Configuration over code</td><td>A new assistant is a <code>ROLES</code> entry plus an SOP document</td></tr>
+    <tr><td>Roles are not permissions</td><td>Every role reads the same view with the same login; per-team access would need one view and login per role</td></tr>
+    <tr><td>State vs per-call config</td><td>The role is not saved in the graph state; the memory still holds only the conversation</td></tr>
+  </table>
+
   <h2>Accepted Limits and Open Items</h2>
   <p>Known limits (see <a href="phase5-notes.md">phase5-notes.md</a>): one user at a time, no login, a failed audit
   write is lost apart from the warning, and the database owner can edit the audit table. Still open in the rewrite:

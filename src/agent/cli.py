@@ -1,13 +1,30 @@
+import argparse
 import asyncio
 import uuid
 from agent.llm import build_llm, describe_llm
 from agent.graph import build_graph
+from agent.prompts import DEFAULT_ROLE, role_titles
 from agent.tools import open_adapter
 from agent.turn import run_turn
 
 
+def parse_args() -> argparse.Namespace:
+    roles = role_titles()
+    parser = argparse.ArgumentParser(description="Chat with the supply-chain agent.")
+    parser.add_argument(
+        "--role",
+        choices=list(roles),
+        default=DEFAULT_ROLE,
+        help="which department assistant to talk to: "
+        + "; ".join(f"{role_id} = {title}" for role_id, title in roles.items()),
+    )
+    return parser.parse_args()
+
+
 async def main():
+    role = parse_args().role
     provider, model = describe_llm()
+    print(f"Assistant: {role_titles()[role]} ({role}). Type exit to leave.")
     async with open_adapter() as adapter:
         # The async with is the same as in the smoke test. The chat loop lives inside it, so the MCP server stays alive for the whole conversation. When the block ends, the server stops
 
@@ -22,7 +39,7 @@ async def main():
             if not question:
                 continue
             # run_turn runs the question, writes the audit rows and yields one event per step.
-            async for event in run_turn(graph, question, session_id, provider, model):
+            async for event in run_turn(graph, question, session_id, provider, model, role):
                 if event.kind == "tool_call":
                     print(f"  [tool] {event.tool_name} {event.text}")
                 elif event.kind == "tool_result":

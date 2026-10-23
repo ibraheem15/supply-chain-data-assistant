@@ -15,6 +15,7 @@ This file provides guidance to AI Agents when working with code in this reposito
 - **Phase 3 — Implementation:** complete. The SOP ingestion pipeline (parsing, heading-aware chunking, local/Gemini embeddings, incremental Pinecone sync), the agent security layer (read-only `USR_FDE_RO` user, `ai.VW_SUPPLY_CHAIN_READINGS` view, `make agent-db-setup`) and the three agent tools in `src/resources/` (`query_telemetry_data`, `fetch_weather_conditions`, `search_compliance_sop`, exposed through an MCP server, `make mcp-server`) are built — see [`docs/phase3-notes.md`](docs/phase3-notes.md).
 - **Phase 4 — Agent orchestration:** complete. A LangGraph ReAct agent (Gemini or Groq reasoner, toggled with `LLM_PROVIDER`) in `src/agent/` that calls the Phase 3 tools through the MCP server, run with `make agent` — see [`docs/phase4-notes.md`](docs/phase4-notes.md).
 - **Phase 5 — Audit log and Streamlit UI:** complete. `audit.AgentAuditLog` is written by an insert-only login and read through a select-only login (`make audit-db-setup`); every turn is audited by a shared `run_turn()` used by both the CLI and a single-chat Streamlit UI in `src/ui/` with live tool cards and an audit viewer (`make ui`) — see [`docs/phase5-notes.md`](docs/phase5-notes.md).
+- **Phase 6 — Role-based assistants:** complete. Seven department assistants (`cold_chain` default, `dispatch`, `warehouse`, `cost`, `supplier`, `safety`, `risk`) selected with `--role` or in the UI sidebar; a `ROLES` table in `src/agent/prompts.py`, the role in the per-call config, a `Role` column in the audit log, and sample SOPs in `data/policy/` — see [`docs/phase6-notes.md`](docs/phase6-notes.md). Phases 1 to 5 are closed: do not edit their notes.
 
 ## Architecture
 
@@ -37,6 +38,7 @@ See [`docs/domain-model.md`](docs/domain-model.md) for the canonical class and d
 - `docs/phase4-notes.md` — Phase 4 retrospective: the orchestrator
 - `docs/phase5-plan.md` — Phase 5 plan: audit log (5a) and Streamlit UI (5b)
 - `docs/phase5-notes.md` — Phase 5 retrospective: audit log, UI, runtime
+- `docs/phase6-notes.md` — Phase 6 retrospective: role-based department assistants
 
 
 ## Who You Are Teaching

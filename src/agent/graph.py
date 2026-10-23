@@ -1,8 +1,9 @@
 from langchain_core.messages import SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, MessagesState, START
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
-from agent.prompts import build_system_prompt
+from agent.prompts import DEFAULT_ROLE, build_system_prompt
 
 
 def build_graph(llm, tools):
@@ -11,7 +12,7 @@ def build_graph(llm, tools):
     """
     llm_with_tools = llm.bind_tools(tools)
 
-    async def reasoner(state: MessagesState):
+    async def reasoner(state: MessagesState, config: RunnableConfig):
         """
         state is the current state of the conversation, containing all previous messages.
         MessageState containing the conversation history up to this point in "messages".
@@ -20,7 +21,10 @@ def build_graph(llm, tools):
         #TODO
         # prompt caching 
 
-        messages = [SystemMessage(content=build_system_prompt())] + state["messages"]
+        # The role (which department assistant this is) comes in the per-call config, next to thread_id.
+        # So one graph serves every role, and the role is not stored in the saved state.
+        role = config.get("configurable", {}).get("role", DEFAULT_ROLE)
+        messages = [SystemMessage(content=build_system_prompt(role))] + state["messages"]
         
         # We add the system prompt here every time instead of storing it in the state, otherwise the memory would save a new copy of it on every turn.
         

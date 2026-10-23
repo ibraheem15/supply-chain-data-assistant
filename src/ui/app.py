@@ -14,6 +14,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from agent.prompts import DEFAULT_ROLE, role_titles
 from ui import runtime as rt
 
 st.set_page_config(page_title="Cold-Chain Assistant", page_icon=":material/ac_unit:", layout="wide")
@@ -77,6 +78,17 @@ def render_sidebar(runtime: rt.AgentRuntime) -> None:
             st.session_state.messages = []
             st.session_state.session_id = runtime.new_session_id()
             st.rerun()
+        # Which department assistant to talk to. Locked once the chat has messages, because the saved
+        # conversation belongs to one role; "New chat" unlocks it.
+        titles = role_titles()
+        st.selectbox(
+            "Assistant",
+            list(titles),
+            format_func=titles.get,
+            key="role",
+            disabled=bool(st.session_state.messages),
+            help="Each assistant focuses on one team's questions. Start a new chat to switch.",
+        )
         st.divider()
         st.subheader("Status")
         agent_dot = {"ready": ":green[●]", "error": ":red[●]"}.get(runtime.state, ":orange[●]")
@@ -103,7 +115,7 @@ def run_turn_live(runtime: rt.AgentRuntime, question: str) -> dict[str, Any]:
     """Run one turn and render it as it happens. Returns the assistant message to keep in history."""
     message: dict[str, Any] = {"role": "assistant", "content": "", "tools": [], "notes": []}
     try:
-        events = runtime.submit(question, st.session_state.session_id)
+        events = runtime.submit(question, st.session_state.session_id, st.session_state.role)
     except rt.Busy:
         message["notes"].append(
             {"level": "warning", "text": "Another turn is still running. Try again shortly."}
@@ -241,7 +253,7 @@ def render_audit() -> None:
 
     st.caption(f"{len(rows)} entries, newest first (limit 200).")
     table = pd.DataFrame(rows)
-    shown = ["LogId", "LoggedAtUtc", "SessionId", "StepNo", "EventType", "ToolName", "Status", "DurationMs"]
+    shown = ["LogId", "LoggedAtUtc", "SessionId", "Role", "StepNo", "EventType", "ToolName", "Status", "DurationMs"]
     view = table[[c for c in shown if c in table]].copy()
     view["SessionId"] = view["SessionId"].str[:8]
     # A one-line preview of what the event carried (answer, tool result, prompt/SQL or error), so a final
@@ -256,7 +268,7 @@ def render_audit() -> None:
     row = table[table["LogId"] == chosen].iloc[0]
     st.markdown(
         f"**{row['EventType']}** · {row['ToolName'] or row['Node']} · {row['LoggedAtUtc']}"
-        f" · {row['Provider'] or '-'} / {row['Model'] or '-'}"
+        f" · {row['Provider'] or '-'} / {row['Model'] or '-'} · role: {row['Role'] or '-'}"
     )
     for label, column, language in (
         ("Input", "InputData", "text"),
@@ -275,6 +287,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = runtime.new_session_id()
+if "role" not in st.session_state:
+    st.session_state.role = DEFAULT_ROLE
 
 render_sidebar(runtime)
 chat_tab, audit_tab = st.tabs([":material/chat: Chat", ":material/fact_check: Audit log"])

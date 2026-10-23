@@ -27,6 +27,7 @@ COLUMNS = (
     "ErrorMessage",
     "Provider",
     "Model",
+    "Role",
     "DurationMs",
     "PromptTokens",
     "CompletionTokens",
@@ -215,7 +216,7 @@ class AuditReader:
         where = f"WHERE {' AND '.join(conditions)} " if conditions else ""
         sql = (
             f"SELECT TOP {MAX_SEARCH_ROWS} LogId, LoggedAtUtc, SessionId, TurnId, StepNo, Node, EventType, "
-            "ToolName, ToolCallId, Status, InputData, OutputData, ErrorMessage, Provider, Model, "
+            "ToolName, ToolCallId, Status, InputData, OutputData, ErrorMessage, Provider, Model, Role, "
             "DurationMs, PromptTokens, CompletionTokens "
             f"FROM audit_2.AgentAuditLog {where}ORDER BY LogId DESC"
         )

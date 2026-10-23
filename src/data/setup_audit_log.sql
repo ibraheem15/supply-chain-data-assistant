@@ -41,6 +41,7 @@ BEGIN
         [ErrorMessage]     NVARCHAR(MAX) NULL,       -- secrets redacted by the writer
         [Provider]         VARCHAR(50)   NULL,
         [Model]            VARCHAR(100)  NULL,
+        [Role]             VARCHAR(50)   NULL,       -- which department assistant answered
         [DurationMs]       INT           NULL,       -- time since the previous event
         [PromptTokens]     INT           NULL,
         [CompletionTokens] INT           NULL
@@ -48,6 +49,11 @@ BEGIN
     CREATE INDEX [IX_AgentAuditLog_Session] ON [audit_2].[AgentAuditLog] ([SessionId], [LogId]);
     CREATE INDEX [IX_AgentAuditLog_LoggedAt] ON [audit_2].[AgentAuditLog] ([LoggedAtUtc]);
 END
+GO
+
+-- 2b. A table that was created before roles existed gets the Role column added (safe to re-run).
+IF COL_LENGTH(N'[audit_2].[AgentAuditLog]', N'Role') IS NULL
+    EXEC (N'ALTER TABLE [audit_2].[AgentAuditLog] ADD [Role] VARCHAR(50) NULL');
 GO
 
 -- 3. Database users for the two logins.

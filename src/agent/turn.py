@@ -7,6 +7,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 
 from agent.audit import record
+from agent.prompts import DEFAULT_ROLE
 
 
 # What a front end (the CLI or the UI) receives while a turn runs.
@@ -38,9 +39,17 @@ def tool_status(text: str) -> str | None:
 
 # An async generator: `async def` with `yield`. The caller reads it with `async for` and receives each event
 # while the agent is still working, instead of waiting for the final answer.
-async def run_turn(graph, question: str, session_id: str, provider: str = "", model: str = ""):
+async def run_turn(
+    graph,
+    question: str,
+    session_id: str,
+    provider: str = "",
+    model: str = "",
+    role: str = DEFAULT_ROLE,
+):
     """
-    Runs one question through the graph, writes one audit row per step and yields a TurnEvent per step.
+    Runs one question through the graph as the given role (department assistant), writes one audit row
+    per step (each row records the role) and yields a TurnEvent per step.
     It never raises: a failure becomes an "error" event. If the audit write fails, one "audit_warning"
     event is yielded for the turn and the turn carries on.
     """
@@ -49,7 +58,8 @@ async def run_turn(graph, question: str, session_id: str, provider: str = "", mo
     last = time.monotonic()
     warned = False
     pending: list[TurnEvent] = []  # events waiting to be yielded (an inner function cannot yield for us)
-    config = {"configurable": {"thread_id": session_id}}
+    # thread_id keys the memory; role picks the system prompt inside the graph's reasoner node.
+    config = {"configurable": {"thread_id": session_id, "role": role}}
 
     async def log(node: str, event_type: str, **fields) -> int:
         # Writes one audit row and returns its DurationMs: the time since the previous event.
@@ -65,6 +75,7 @@ async def run_turn(graph, question: str, session_id: str, provider: str = "", mo
             "EventType": event_type,
             "Provider": provider or None,
             "Model": model or None,
+            "Role": role,
             "DurationMs": duration,
             **fields,
         }

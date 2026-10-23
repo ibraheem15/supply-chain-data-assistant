@@ -16,6 +16,7 @@ import uuid
 from agent.audit import AuditReader, ping
 from agent.graph import build_graph
 from agent.llm import build_llm, describe_llm
+from agent.prompts import DEFAULT_ROLE
 from agent.tools import open_adapter
 from agent.turn import TurnEvent, run_turn
 
@@ -92,19 +93,21 @@ class AgentRuntime:
         return str(uuid.uuid4())
 
     # Start one turn. Returns a queue of TurnEvent that ends with None. Raises NotReady or Busy.
-    def submit(self, question: str, session_id: str) -> "queue.Queue[TurnEvent | None]":
+    def submit(
+        self, question: str, session_id: str, role: str = DEFAULT_ROLE
+    ) -> "queue.Queue[TurnEvent | None]":
         if self.state != "ready":
             raise NotReady(self.error or "The agent is still starting.")
         if not self._turn_lock.acquire(blocking=False):
             raise Busy("Another turn is still running.")
         events: queue.Queue = queue.Queue()
-        asyncio.run_coroutine_threadsafe(self._turn(events, question, session_id), self._loop)
+        asyncio.run_coroutine_threadsafe(self._turn(events, question, session_id, role), self._loop)
         return events
 
-    async def _turn(self, events: queue.Queue, question: str, session_id: str) -> None:
+    async def _turn(self, events: queue.Queue, question: str, session_id: str, role: str) -> None:
         try:
             async for event in run_turn(
-                self._graph, question, session_id, self.provider, self.model
+                self._graph, question, session_id, self.provider, self.model, role
             ):
                 events.put(event)
         finally:

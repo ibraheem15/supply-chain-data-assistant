@@ -83,6 +83,24 @@ Two details worth knowing:
 - **One question can use several tools.** For example, the agent can look up the incident in SQL, search the SOP for the matching rule, and then answer. Each trip around the loop is one more LLM call.
 - **Tool errors don't stop the agent.** A failed tool call comes back as a result the LLM can read, so it can fix its input and retry, or tell the user that a source is unavailable.
 
+## Role-based assistants
+
+Phase 6 ([`docs/phase6-notes.md`](docs/phase6-notes.md)). Different teams ask different questions of the same data. Instead of one generic assistant, the agent can run as a **department assistant**. A role changes who the agent is, which columns it focuses on, the table it shows in its answer, and which SOP it quotes. It does not change the tools, the data or the database permissions.
+
+| Role (`--role`) | Assistant | Focus | SOP it searches |
+| --- | --- | --- | --- |
+| `cold_chain` (default) | Cold-Chain Analyst | cargo temperature, breaches | Cold-Chain & Transit Anomalies |
+| `dispatch` | Route & Delay Analyst | ETA variation, congestion, delay probability | Dispatch, Delays & Rerouting |
+| `warehouse` | Warehouse Operations | inventory, dock time, equipment | Warehouse Operations |
+| `cost` | Cost & Fuel Analyst | fuel use, shipping cost | Fuel & Shipping Cost |
+| `supplier` | Supplier & Customs Analyst | supplier reliability, lead time, customs | Supplier Reliability & Customs |
+| `safety` | Driver Safety Analyst | driver behaviour and fatigue | Driver Safety & Fatigue |
+| `risk` | Risk & Compliance | risk class, route risk, disruption likelihood | Cold-Chain & Transit Anomalies (risk triggers) |
+
+Pick one with `make agent AGENT_ARGS="--role dispatch"`, or in the Streamlit sidebar ("Assistant", chosen at the start of a chat). Every audit row records the role, so the log shows which assistant answered. The role travels in the per-call config next to the conversation id, so one agent graph serves all roles and the saved memory is unchanged. The SOP documents under `data/policy/` are sample policies with illustrative thresholds.
+
+A role is only a prompt, not a permission: all roles read the same database view. Giving each team its own view and login (the same pattern as the agent's read-only view) would be the next step for real per-team access.
+
 ## Why it can be trusted with company data
 
 - **Least privilege, enforced by the database.** The agent's login has `SELECT` on a single view and nothing else. Even if the agent or its prompt were manipulated, the database refuses writes and access to the raw tables.
@@ -110,6 +128,7 @@ Phases 1 to 5 (data loading, SOP ingestion, agent security layer, tools, agent, 
 | 3 — Implementation | Complete: SOP ingestion (3a), read-only agent user + semantic view (3b), and the three agent tools behind an MCP server (3c) | [`docs/phase3-notes.md`](docs/phase3-notes.md), [`docs/phase-3-plan.md`](docs/phase-3-plan.md) |
 | 4 — Agent orchestration | Complete: LangGraph ReAct agent (Gemini or Groq reasoner) calling the Phase 3 tools via MCP, with a terminal chat (`make agent`) | [`docs/phase4-notes.md`](docs/phase4-notes.md), [`docs/phase-4-plan.md`](docs/phase-4-plan.md) |
 | 5 — Audit log and Streamlit UI | Complete: append-only audit log with insert-only and read-only logins (5a), and a single-chat Streamlit UI with live tool cards and an audit viewer (5b) | [`docs/phase5-notes.md`](docs/phase5-notes.md), [`docs/phase5-plan.md`](docs/phase5-plan.md) |
+| 6 — Role-based assistants | Complete: seven department assistants (cold chain, dispatch, warehouse, cost, supplier, safety, risk), each with its own focus and SOP, chosen per chat; the audit log records the role | [`docs/phase6-notes.md`](docs/phase6-notes.md) |
 
 ## Prerequisites
 
@@ -132,10 +151,10 @@ This creates `.venv` and installs the locked dependencies from `uv.lock`.
 | `make install` | Lock and sync dependencies |
 | `make sqlserver-up` / `make sqlserver-down` | Start / stop the local Docker SQL Server |
 | `make ingest` | Load the CSV into the local SQL Server (`dbo.supply_chain_logistics`) |
-| `make sop-ingest` | Sync the SOP files in `data/policy/` to the Pinecone index (new, changed and deleted files only) |
-| `make agent` | Chat with the agent in the terminal. Every turn is audited. The model is chosen by `LLM_PROVIDER` in `envs/LLM.env` (Gemini or Groq) |
+| `make sop-ingest` | Sync the SOP files in `data/policy/` to the Pinecone index (new, changed and deleted files only). Run it after adding or editing a SOP |
+| `make agent` | Chat with the agent in the terminal. Every turn is audited. The model is chosen by `LLM_PROVIDER` in `envs/LLM.env` (Gemini or Groq). Pick a department assistant with `AGENT_ARGS="--role dispatch"` (see Role-based assistants) |
 | `make mcp-server` | Run the MCP server (three agent tools) over stdio |
-| `make audit-db-setup` | Create the `audit_2` schema, the audit table and the two audit logins (needs `envs/audit_sqlserver.env`) |
+| `make audit-db-setup` | Create the `audit_2` schema, the audit table and the two audit logins; also adds the `Role` column to an older table (needs `envs/audit_sqlserver.env`) |
 | `make ui` | Start the Streamlit chat and audit viewer on http://localhost:8501 (light and dark themes: top-right menu, Settings, Theme) |
 | `make agent-db-setup` | Create the read-only agent login `USR_FDE_RO_2` and the `ai_2.VW_SUPPLY_CHAIN_READINGS` view (needs `envs/agent_sqlserver.env`) |
 | `make lint` / `make format` | Ruff lint / format |
@@ -177,7 +196,8 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   ├── phase-4-plan.md             # Phase 4 plan: agent orchestration (implemented)
 │   ├── phase4-notes.md             # Phase 4 retrospective: the orchestrator
 │   ├── phase5-plan.md              # Phase 5 plan: audit log (5a) and Streamlit UI (5b)
-│   └── phase5-notes.md             # Phase 5 retrospective: audit log, UI, runtime
+│   ├── phase5-notes.md             # Phase 5 retrospective: audit log, UI, runtime
+│   └── phase6-notes.md             # Phase 6 retrospective: role-based department assistants
 ├── src/
 │   ├── data/
 │   │   ├── ingest_supply_chain_dataset.py  # CSV -> SQL Server loader
