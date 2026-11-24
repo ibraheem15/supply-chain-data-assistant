@@ -1,0 +1,8 @@
+# One line per column, in CSV order. sql_type is optional and defaults to FLOAT.
+columns = [
+    { name = "timestamp", legacy = "TS_UTC", sql_type = "DATETIME2(0)" },
+    { name = "store_id", legacy = "STORE_ID", sql_type = "INT" },
+    { name = "units_sold", legacy = "UNITS_SOLD" },
+    { name = "stock_level", legacy = "STK_LVL" },
+    { name = "unit_price", legacy = "UNIT_PRC" },
+]

@@ -1,0 +1,5 @@
+name = "retail"
+table = "dbo.retail_sales"
+view = "ai_2.VW_RETAIL_SALES"
+csv = "data/raw/retail_sales.csv"
+policy_dir = "data/policy_retail"

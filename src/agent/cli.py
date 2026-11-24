@@ -3,14 +3,14 @@ import asyncio
 import uuid
 from agent.llm import build_llm, describe_llm
 from agent.graph import build_graph
-from agent.prompts import DEFAULT_ROLE, role_titles
+from agent.prompts import DEFAULT_ROLE, domain, role_titles
 from agent.tools import open_adapter
 from agent.turn import run_turn
 
 
 def parse_args() -> argparse.Namespace:
     roles = role_titles()
-    parser = argparse.ArgumentParser(description="Chat with the supply-chain agent.")
+    parser = argparse.ArgumentParser(description=f"Chat with the {domain.name} agent.")
     parser.add_argument(
         "--role",
         choices=list(roles),

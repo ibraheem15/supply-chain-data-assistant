@@ -2,10 +2,15 @@ from fastmcp.client.transports import StdioTransport
 import asyncio
 from langchain.mcp import MCPAdapter
 
+from data.domain import load_domain
+
+# The MCP server is a separate process. A stdio child process only gets the variables we list here
+# (plus a few basics like PATH), so it does NOT inherit DOMAIN from our shell. Without DOMAIN it would
+# fall back to "logistics" and the agent would get logistics tools next to a retail prompt.
 transport = StdioTransport(
     command="uv",
     args=["run", "python", "-m", "resources.mcp_server"],
-    env={"PYTHONPATH": "src"},
+    env={"PYTHONPATH": "src", "DOMAIN": load_domain().name},
 )
 
 def open_adapter() -> MCPAdapter:

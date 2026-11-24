@@ -101,6 +101,21 @@ Pick one with `make agent AGENT_ARGS="--role dispatch"`, or in the Streamlit sid
 
 A role is only a prompt, not a permission: all roles read the same database view. Giving each team its own view and login (the same pattern as the agent's read-only view) would be the next step for real per-team access.
 
+## Other domains
+
+Phase 7 ([`docs/phase7-notes.md`](docs/phase7-notes.md)). Everything that is specific to logistics (table, columns, roles, prompt wording) lives in `domains/logistics/`, and the `DOMAIN` environment variable picks the folder (default `logistics`). A new use case is a new folder, a CSV and two commands, with no change to the agent code. `domains/retail/` is a small second domain that proves it.
+
+Besides the four config files (`domain.toml`, `columns.toml`, `roles.toml`, `prompt.toml`), a domain needs real data: the CSV, the SQL Server table loaded from it, and a view plus a grant for the agent login. SOP documents are optional.
+
+```bash
+DOMAIN=retail make ingest          # create the table and load the CSV
+DOMAIN=retail make view-sql        # read the generated view SQL
+DOMAIN=retail make view-setup      # create the view and grant it to the agent login
+DOMAIN=retail make agent           # chat (add AGENT_ARGS="--role pricing" to pick a role)
+```
+
+Known limits: the SOP index and its cache are shared by all domains, so `make sop-ingest` with another `DOMAIN` would remove the first domain's SOPs from the index; the weather tool is registered for every domain. See the notes for the full list.
+
 ## Why it can be trusted with company data
 
 - **Least privilege, enforced by the database.** The agent's login has `SELECT` on a single view and nothing else. Even if the agent or its prompt were manipulated, the database refuses writes and access to the raw tables.
@@ -129,6 +144,7 @@ Phases 1 to 5 (data loading, SOP ingestion, agent security layer, tools, agent, 
 | 4 — Agent orchestration | Complete: LangGraph ReAct agent (Gemini or Groq reasoner) calling the Phase 3 tools via MCP, with a terminal chat (`make agent`) | [`docs/phase4-notes.md`](docs/phase4-notes.md), [`docs/phase-4-plan.md`](docs/phase-4-plan.md) |
 | 5 — Audit log and Streamlit UI | Complete: append-only audit log with insert-only and read-only logins (5a), and a single-chat Streamlit UI with live tool cards and an audit viewer (5b) | [`docs/phase5-notes.md`](docs/phase5-notes.md), [`docs/phase5-plan.md`](docs/phase5-plan.md) |
 | 6 — Role-based assistants | Complete: seven department assistants (cold chain, dispatch, warehouse, cost, supplier, safety, risk), each with its own focus and SOP, chosen per chat; the audit log records the role | [`docs/phase6-notes.md`](docs/phase6-notes.md) |
+| 7 — Other domains | Complete: the logistics specifics moved into `domains/logistics/`, chosen with `DOMAIN`; a second domain (`retail`) runs end to end with config files, a CSV and two commands | [`docs/phase7-notes.md`](docs/phase7-notes.md) |
 
 ## Prerequisites
 
@@ -150,7 +166,8 @@ This creates `.venv` and installs the locked dependencies from `uv.lock`.
 | --- | --- |
 | `make install` | Lock and sync dependencies |
 | `make sqlserver-up` / `make sqlserver-down` | Start / stop the local Docker SQL Server |
-| `make ingest` | Load the CSV into the local SQL Server (`dbo.supply_chain_logistics`) |
+| `make ingest` | Load the CSV of the current domain into the local SQL Server (`dbo.supply_chain_logistics` for the default `logistics`; set `DOMAIN=<name>` for another domain) |
+| `make view-sql` / `make view-setup` | Print / create the agent view and its grant for the current `DOMAIN`, generated from `columns.toml` (the agent login must exist: `make agent-db-setup`) |
 | `make sop-ingest` | Sync the SOP files in `data/policy/` to the Pinecone index (new, changed and deleted files only). Run it after adding or editing a SOP |
 | `make agent` | Chat with the agent in the terminal. Every turn is audited. The model is chosen by `LLM_PROVIDER` in `envs/LLM.env` (Gemini or Groq). Pick a department assistant with `AGENT_ARGS="--role dispatch"` (see Role-based assistants) |
 | `make mcp-server` | Run the MCP server (three agent tools) over stdio |
@@ -197,9 +214,15 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   ├── phase4-notes.md             # Phase 4 retrospective: the orchestrator
 │   ├── phase5-plan.md              # Phase 5 plan: audit log (5a) and Streamlit UI (5b)
 │   ├── phase5-notes.md             # Phase 5 retrospective: audit log, UI, runtime
-│   └── phase6-notes.md             # Phase 6 retrospective: role-based department assistants
+│   ├── phase6-notes.md             # Phase 6 retrospective: role-based department assistants
+│   └── phase7-notes.md             # Phase 7 retrospective: one project, many domains
+├── domains/                        # Phase 7: one folder per use case, chosen by the DOMAIN env var
+│   ├── logistics/                  # domain.toml, columns.toml, roles.toml, prompt.toml
+│   └── retail/                     # second domain that proves the design
 ├── src/
 │   ├── data/
+│   │   ├── domain.py                       # load_domain(): reads domains/<DOMAIN>/ into one Domain object (Phase 7)
+│   │   ├── make_view_sql.py                # Generates the view and grant SQL from columns.toml (Phase 7)
 │   │   ├── ingest_supply_chain_dataset.py  # CSV -> SQL Server loader
 │   │   ├── ingest_sop_pinecone.py          # SOP documents -> Pinecone (Phase 3a)
 │   │   ├── setup_security_and_view.sql     # Read-only agent user + semantic view (Phase 3b)
@@ -214,7 +237,7 @@ See [`docs/phase1-plan.md`](docs/phase1-plan.md) for the full Phase 1 walkthroug
 │   │   └── mcp_server.py                   # Exposes the three tools over MCP (stdio)
 │   ├── agent/                              # Orchestrator (Phase 4) and audit (Phase 5a)
 │   │   ├── llm.py                          # Gemini or Groq chat model (temperature 0, one retry)
-│   │   ├── prompts.py                      # System prompt
+│   │   ├── prompts.py                      # Shared system prompt + roles and wording from the domain
 │   │   ├── tools.py                        # Persistent MCP session -> LangChain tools
 │   │   ├── graph.py                        # LangGraph ReAct wiring
 │   │   ├── turn.py                         # run_turn(): one audited turn as a stream of events

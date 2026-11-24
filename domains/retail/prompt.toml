@@ -1,0 +1,19 @@
+data_summary = "historical hourly retail sales readings"
+sql_topics = "sales, stock level, price, store"
+sop_topics = "restocking, markdowns and promotions"
+
+# The numbered tool list shown in the prompt (one line per tool the domain uses).
+tool_lines = '''
+1. query_telemetry_data: historical hourly readings (2024-06-17 to 2024-06-30). Check telemetry first.
+2. search_compliance_sop: company procedures, thresholds and rules.
+'''
+
+# Examples of causes the agent may name, only when the data shows them.
+cause_examples = "a promotion, a price change, a stockout"
+
+data_rules = '''
+- The data is HISTORICAL. It has no live feed, no "current stock", no customer, order or product id.
+  So give most recent matching reading, <timestamp>.
+- For questions about a store, filter on store_id. Use COUNT/AVG/SUM/GROUP BY only when the user asks for
+  statistics. Use TOP, never LIMIT. NEVER average stock levels across stores to invent a store's stock.
+'''

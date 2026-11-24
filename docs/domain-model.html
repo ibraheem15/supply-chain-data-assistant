@@ -340,6 +340,24 @@
     <tr><td>State vs per-call config</td><td>The role is not saved in the graph state; the memory still holds only the conversation</td></tr>
   </table>
 
+  <h2>Phase 7: Domain Folders (<code>src/data/domain.py</code>, <code>domains/&lt;name&gt;/</code>)</h2>
+  <p>Everything specific to a use case is data in <code>domains/&lt;name&gt;/</code>. <code>load_domain()</code> in
+  <code>src/data/domain.py</code> reads the folder named by the <code>DOMAIN</code> environment variable (default
+  <code>logistics</code>) into one frozen <code>Domain</code> object, and the modules that used to hold constants read
+  it instead. <code>domain.py</code> is in <code>data/</code>, the lowest layer, so <code>resources/</code> and
+  <code>agent/</code> import it and it imports none of them. The MCP server is a separate process, so
+  <code>agent/tools.py</code> passes <code>DOMAIN</code> to it explicitly.</p>
+  <table>
+    <tr><th>Concept</th><th>Where</th></tr>
+    <tr><td>Configuration over code</td><td>A new use case is a folder of TOML files, a CSV and two commands (<code>make ingest</code>, <code>make view-setup</code>)</td></tr>
+    <tr><td>Config is not data</td><td>The TOML files describe the table, columns and wording; the table, the view, the grant and the SOP index must still exist in the databases</td></tr>
+    <tr><td>Generated view</td><td><code>make_view_sql.py</code> writes the view and grant from <code>columns.toml</code>; the agent login still needs <code>make agent-db-setup</code></td></tr>
+    <tr><td>Separate process, separate environment</td><td>The tool server gets <code>DOMAIN</code> from <code>tools.py</code>, not from the shell</td></tr>
+  </table>
+  <p>Limits: the SOP cache and Pinecone index are shared by all domains, the weather tool is registered for every
+  domain, <code>parse_csv</code> assumes numeric columns, and the audit table has no domain column (see
+  <a href="phase7-notes.md">phase7-notes.md</a>).</p>
+
   <h2>Accepted Limits and Open Items</h2>
   <p>Known limits (see <a href="phase5-notes.md">phase5-notes.md</a>): one user at a time, no login, a failed audit
   write is lost apart from the warning, and the database owner can edit the audit table. Still open in the rewrite:

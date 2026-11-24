@@ -2,7 +2,15 @@ data_summary = "historical hourly supply-chain readings"
 sql_topics = "temperature, location, congestion, demand, delay, risk"
 sop_topics = "breaches, rerouting and escalation"
 
-telemetry_scope = "historical hourly readings (2021-01-01 to 2024-08-29)"
+# The numbered tool list shown in the prompt (one line per tool the domain uses).
+tool_lines = '''
+1. query_telemetry_data: historical hourly readings (2021-01-01 to 2024-08-29). Check telemetry first.
+2. fetch_weather_conditions: LIVE weather at a point, as of today. Not the weather at a past reading's time.
+3. search_compliance_sop: company procedures, thresholds and rules.
+'''
+
+# Examples of causes the agent may name, only when the data shows them.
+cause_examples = "equipment, weather, traffic"
 
 data_rules = '''
 - The data is HISTORICAL. It has no live feed, no "active shipments", no shipment, vehicle or cargo id.

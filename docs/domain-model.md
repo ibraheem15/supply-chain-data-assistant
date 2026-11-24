@@ -242,6 +242,35 @@ flowchart LR
 | Roles are not permissions | Every role reads the same view with the same login; per-team access would need one view and login per role |
 | State vs per-call config | The role is not saved in the graph state; the memory still holds only the conversation |
 
+## Phase 7: Domain Folders (`src/data/domain.py`, `domains/<name>/`)
+
+Everything specific to a use case is data in `domains/<name>/`. `load_domain()` in `src/data/domain.py` reads the
+folder named by the `DOMAIN` environment variable (default `logistics`) into one frozen `Domain` object, and the
+modules that used to hold constants read it instead. `domain.py` is in `data/`, the lowest layer, so `resources/` and
+`agent/` import it and it imports none of them. The MCP server is a separate process, so `agent/tools.py` passes
+`DOMAIN` to it explicitly.
+
+```mermaid
+flowchart LR
+    Env["DOMAIN env var"] --> Load["load_domain()\ndata/domain.py"]
+    Files["domains/name/\ndomain, columns, roles, prompt .toml"] --> Load
+    Load --> Ingest["ingest_supply_chain_dataset.py\ningest_sop_pinecone.py"]
+    Load --> Schema["schema_context.py\nmcp_server.py"]
+    Load --> Prompts["agent/prompts.py\nagent/cli.py"]
+    Load --> ViewSql["make_view_sql.py"]
+    Tools["agent/tools.py"] -->|"DOMAIN in the child env"| Schema
+```
+
+| Concept | Where |
+| --- | --- |
+| Configuration over code | A new use case is a folder of TOML files, a CSV and two commands (`make ingest`, `make view-setup`) |
+| Config is not data | The TOML files describe the table, columns and wording; the table, the view, the grant and the SOP index must still exist in the databases |
+| Generated view | `make_view_sql.py` writes the view and grant from `columns.toml`; the agent login still needs `make agent-db-setup` |
+| Separate process, separate environment | The tool server gets `DOMAIN` from `tools.py`, not from the shell |
+
+Limits: the SOP cache and Pinecone index are shared by all domains, the weather tool is registered for every domain,
+`parse_csv` assumes numeric columns, and the audit table has no domain column (see [`phase7-notes.md`](phase7-notes.md)).
+
 ## Accepted Limits and Open Items
 
 Known limits (see [`phase5-notes.md`](phase5-notes.md)): one user at a time, no login, a failed audit write is
