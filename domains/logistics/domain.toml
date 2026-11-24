@@ -1,0 +1,5 @@
+name = "logistics"
+table = "dbo.supply_chain_logistics"
+view = "ai_2.VW_SUPPLY_CHAIN_READINGS"
+csv = "data/raw/dynamic_supply_chain_logistics_dataset.csv"
+policy_dir = "data/policy"

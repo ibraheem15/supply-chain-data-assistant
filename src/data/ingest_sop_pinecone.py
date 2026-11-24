@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 
 from dotenv import load_dotenv
 import os
+from data.domain import load_domain
 
 # * Caching
 import hashlib
@@ -21,7 +22,8 @@ from pinecone import Pinecone, ServerlessSpec
 
 ROOT = Path(__file__).resolve().parents[2]
 
-POLICY_DIR = ROOT / "data" / "policy"
+domain = load_domain()
+POLICY_DIR = domain.policy_dir
 VECTORDB_ENV_FILE = ROOT / "envs" / "vectorDB.env"
 LLM_ENV_FILE = ROOT / "envs" / "LLM.env"
 

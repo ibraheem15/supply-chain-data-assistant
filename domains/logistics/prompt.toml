@@ -1,0 +1,17 @@
+data_summary = "historical hourly supply-chain readings"
+sql_topics = "temperature, location, congestion, demand, delay, risk"
+sop_topics = "breaches, rerouting and escalation"
+
+telemetry_scope = "historical hourly readings (2021-01-01 to 2024-08-29)"
+
+data_rules = '''
+- The data is HISTORICAL. It has no live feed, no "active shipments", no shipment, vehicle or cargo id.
+  So give most recent matching reading, <timestamp>.
+- For "near", "around" or "which shipment" questions, LIST the nearest real readings: use TOP 5 ... ORDER BY
+  SQRT(POWER(vehicle_gps_latitude - LAT, 2) + POWER(vehicle_gps_longitude - LON, 2)). Report each reading's
+  own timestamp and values. NEVER average coordinates or temperatures to invent a location or a shipment.
+  Use COUNT/AVG/GROUP BY only when the user asks for statistics. Use TOP, never LIMIT.
+- Weather: call fetch_weather_conditions with a real reading's latitude/longitude, and say it is today's
+  weather, not the weather when that reading was taken. Call it "live weather", never "current conditions"
+  of the cargo.
+'''

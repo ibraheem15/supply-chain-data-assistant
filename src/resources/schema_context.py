@@ -2,11 +2,12 @@
 
 # COLUMNS is the tuple of business names, LEGACY_COLUMN_NAMES maps each business name to the
 # legacy name that the SOP documents use. Both come from Phase 1.
-from data.ingest_supply_chain_dataset import COLUMNS, LEGACY_COLUMN_NAMES
+from data.domain import load_domain
 
-# The only database object the agent may query (the view from setup_security_and_view.sql)
-VIEW_NAME = "ai_2.VW_SUPPLY_CHAIN_READINGS"
-
+domain = load_domain()
+VIEW_NAME = domain.view
+COLUMNS = domain.column_names
+LEGACY_COLUMN_NAMES = domain.legacy_names
 
 def build_schema_context() -> str:
     """

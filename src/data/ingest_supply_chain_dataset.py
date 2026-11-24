@@ -9,13 +9,16 @@ import csv
 
 import pyodbc
 
+from data.domain import load_domain
+
+
 # Project root folder
 ROOT = Path(__file__).resolve().parents[2]
-
 # Constants
-DEFAULT_CSV = ROOT / "data" / "raw" / "dynamic_supply_chain_logistics_dataset.csv"
+domain = load_domain()
+DEFAULT_CSV = domain.csv
 DEFAULT_ENV_FILE = ROOT / "envs" / "legacy_sqlserver.env"
-DATABASE_TABLE = "dbo.supply_chain_logistics"
+DATABASE_TABLE = domain.table
 # A set literal {..}: unordered, unique values, O(1) membership tests (`x in RISK_LEVELS`).
 RISK_LEVELS = {
     "Low Risk",
@@ -23,71 +26,13 @@ RISK_LEVELS = {
     "High Risk",
 }  # Used set here because it holds only unique values and allows for O(1) membership tests
 
-COLUMNS = (  # we used tuple "()" instead of list "[]" because the column names are fixed and should not be modified, tuple is immutable
-    "timestamp",
-    "vehicle_gps_latitude",
-    "vehicle_gps_longitude",
-    "fuel_consumption_rate",
-    "eta_variation_hours",
-    "traffic_congestion_level",
-    "warehouse_inventory_level",
-    "loading_unloading_time",
-    "handling_equipment_availability",
-    "order_fulfillment_status",
-    "weather_condition_severity",
-    "port_congestion_level",
-    "shipping_costs",
-    "supplier_reliability_score",
-    "lead_time_days",
-    "historical_demand",
-    "iot_temperature",
-    "cargo_condition_status",
-    "route_risk_level",
-    "customs_clearance_time",
-    "driver_behavior_score",
-    "fatigue_monitoring_score",
-    "disruption_likelihood_score",
-    "delay_probability",
-    "risk_classification",
-    "delivery_time_deviation",
-)
+COLUMNS = domain.column_names
 
 # LEGACY columns that were used in the previous version of the dataset
 # We will add legacy values of keys because we are  predicting that ususally the systems in enterprise are old and have legacy column names.
-LEGACY_COLUMN_NAMES = {  # Using dict to map current column names to their legacy counterparts which is useful for backward compatibility
-    "timestamp": "TM_UTC",
-    "vehicle_gps_latitude": "VEH_LAT",
-    "vehicle_gps_longitude": "VEH_LON",
-    "fuel_consumption_rate": "FUEL_RT_LPH",
-    "eta_variation_hours": "ETA_VAR_HR",
-    "traffic_congestion_level": "TRF_CONG_LVL",
-    "warehouse_inventory_level": "WH_INV_LVL",
-    "loading_unloading_time": "LD_UNLD_TM",
-    "handling_equipment_availability": "HDL_EQP_AVAIL",
-    "order_fulfillment_status": "ORD_FULFIL_ST",
-    "weather_condition_severity": "WX_SEV",
-    "port_congestion_level": "PORT_CONG_LVL",
-    "shipping_costs": "SHIP_COST_USD",
-    "supplier_reliability_score": "SUPL_REL_SCR",
-    "lead_time_days": "LEAD_TM_DY",
-    "historical_demand": "HIST_DMD",
-    "iot_temperature": "IOT_TEMP_C",
-    "cargo_condition_status": "CGO_COND_ST",
-    "route_risk_level": "RT_RISK_LVL",
-    "customs_clearance_time": "CUST_CLR_TM",
-    "driver_behavior_score": "DRV_BHVR_SCR",
-    "fatigue_monitoring_score": "FTG_MON_SCR",
-    "disruption_likelihood_score": "DISR_LKHD_SCR",
-    "delay_probability": "DELAY_PROB",
-    "risk_classification": "RISK_CLASS",
-    "delivery_time_deviation": "DEL_TM_DEV",
-}
+LEGACY_COLUMN_NAMES = domain.legacy_names
 
-SQL_TYPES = {
-    "timestamp": "DATETIME2(0)",
-    "risk_classification": "NVARCHAR(30)",
-}
-
+SQL_TYPES = domain.sql_types
 
 class IngestionError(Exception):
     """Custom exception for errors during the ingestion of the supply chain dataset."""

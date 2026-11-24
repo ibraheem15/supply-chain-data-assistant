@@ -4,13 +4,15 @@ from resources.schema_context import build_schema_context
 from resources.sop_tool import search_compliance_sop as _search
 from resources.sql_tool import MAX_ROWS, query_telemetry_data as _query
 from resources.weather_tool import fetch_weather_conditions as _weather
+from data.domain import load_domain
 
+domain = load_domain()
 # We used _ as a prefix for imported functions to indicate they are internal.
 
 mcp = FastMCP("supply-chain-tools")
 
-SQL_DESCRIPTION = f"""Run one T-SQL SELECT on historical hourly supply-chain readings.
-For past temperature, location, congestion, demand, delay, risk. At most {MAX_ROWS} rows come back (`truncated` says if more existed): prefer COUNT/AVG/GROUP BY over listing rows. On status "error", fix the SQL and retry.
+SQL_DESCRIPTION = f"""Run one T-SQL SELECT on {domain.prompt['data_summary']}.
+For past {domain.prompt['sql_topics']}. At most {MAX_ROWS} rows come back (`truncated` says if more existed): prefer COUNT/AVG/GROUP BY over listing rows. On status "error", fix the SQL and retry.
 {build_schema_context()}"""
 
 

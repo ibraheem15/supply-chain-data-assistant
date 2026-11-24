@@ -18,10 +18,10 @@ test:
 	uv run pytest
 
 ingest:
-	uv run python src/data/ingest_supply_chain_dataset.py
+	PYTHONPATH=src uv run python -m data.ingest_supply_chain_dataset
 
 sop-ingest:
-	uv run python src/data/ingest_sop_pinecone.py
+	PYTHONPATH=src uv run python -m data.ingest_sop_pinecone
 
 agent-db-setup:
 	@set -a; . envs/legacy_sqlserver.env; . envs/agent_sqlserver.env; set +a; \
